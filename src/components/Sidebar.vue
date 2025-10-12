@@ -1,34 +1,33 @@
 <template>
   <aside class="sidebar">
-    <div class="sidebar-header">
+    <RouterLink to="/" class="sidebar-header">
       <img src="../img/pulseSecurity.png" alt="PulseSecurity Logo" class="logo" />
-    </div>
+    </RouterLink>
 
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item">
+      <RouterLink to="/opinioes" class="nav-item">
         <i class="fas fa-comment-dots"></i>
         <span>Opiniões</span>
-      </a>
+      </RouterLink>
 
-      <a href="#" class="nav-item">
+      <RouterLink to="/emocoes" class="nav-item">
         <i class="fas fa-face-smile"></i>
         <span>Emoções</span>
-      </a>
+      </RouterLink>
 
-      <a href="#" class="nav-item">
+      <RouterLink to="/topicos" class="nav-item">
         <i class="fas fa-layer-group"></i>
         <span>Tópicos</span>
-      </a>
+      </RouterLink>
 
-      <a href="#" class="nav-item">
+      <RouterLink to="/tendencias" class="nav-item">
         <i class="fas fa-chart-line"></i>
         <span>Tendências</span>
-      </a>
+      </RouterLink>
 
-      <a href="#" class="nav-item">
-        <i class="fas fa-clipboard-list"></i>
+      <RouterLink to="/resumo" class="nav-item"> <i class="fas fa-clipboard-list"></i>
         <span>Resumo</span>
-      </a>
+      </RouterLink>
     </nav>
 
     <div class="sidebar-footer">
@@ -37,18 +36,22 @@
         <span class="user-name">Nome do usuário</span>
       </div>
       <div class="user-actions">
-        <a href="#">
+        <RouterLink to="/profile">
           <i class="fas fa-id-badge"></i>
           Perfil
-        </a>
-        <a href="#">
+        </RouterLink>
+        <RouterLink to="/login">
           <i class="fas fa-sign-out-alt"></i>
           Sair
-        </a>
+        </RouterLink>
       </div>
     </div>
   </aside>
 </template>
+
+<script setup>
+import { RouterLink } from 'vue-router';
+</script>
 
 <style scoped>
 .sidebar {
@@ -123,7 +126,8 @@
   align-items: center;
 }
 
-.user-actions a {
+.user-actions a,
+.user-actions a:visited {
   color: #555;
   text-decoration: none;
   display: flex;

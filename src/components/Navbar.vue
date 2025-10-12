@@ -1,6 +1,9 @@
 <template>
   <header class="navbar">
-    <img src="../img/pulseSecurity.png" alt="PulseSecurity Logo" class="logo">
+    <RouterLink to="/" class="logo-link">
+      <img src="../img/pulseSecurity.png" alt="PulseSecurity Logo" class="logo">
+    </RouterLink>
+
     <nav>
       <RouterLink to="/login" class="login-button">Login</RouterLink>
     </nav>
@@ -23,8 +26,14 @@ import { RouterLink } from 'vue-router';
   align-items: center;
 }
 
+.logo-link {
+  display: flex;
+  align-items: center;
+}
+
 .logo {
   height: 40px;
+  display: block;
 }
 
 .login-button {
