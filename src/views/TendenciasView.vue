@@ -12,17 +12,35 @@
             </option>
           </select>
         </div>
-        <div class="file-selector">
-          <label for="time-margin">Comparar Períodos:</label>
-          <select id="time-margin" v-model="timeMarginInDays">
-            <option value="7">Últimos 7 dias</option>
-            <option value="15">Últimos 15 dias</option>
-            <option value="30">Últimos 30 dias</option>
-          </select>
-        </div>
       </div>
     </header>
 
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="start-date">Data Início:</label>
+        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading">
+      </div>
+      <div class="filter-group">
+        <label for="end-date">Data Fim:</label>
+        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading">
+      </div>
+      <div class="filter-group">
+        <label for="tag-select">Filtrar por Tag:</label>
+        <select id="tag-select" v-model="dataStore.selectedTag" :disabled="dataStore.loading">
+          <option v-for="tag in dataStore.allTags" :key="tag" :value="tag">
+            {{ tag }}
+          </option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="time-margin">Comparar Períodos:</label>
+        <select id="time-margin" v-model="timeMarginInDays">
+          <option value="7">Últimos 7 dias</option>
+          <option value="15">Últimos 15 dias</option>
+          <option value="30">Últimos 30 dias</option>
+        </select>
+      </div>
+    </div>
     <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state">
         <div class="spinner"></div>
@@ -30,6 +48,7 @@
       </div>
       <div v-else-if="dataStore.error" class="feedback-state error">
         <p>😕 Ocorreu um erro ao carregar os dados.</p>
+        <pre>{{ dataStore.error }}</pre>
       </div>
 
       <div v-else-if="trendData.length > 0" class="chart-card">
@@ -47,13 +66,14 @@
               </div>
               <span class="change-indicator" :class="getChangeClass(item.change)">
                 {{ formatChange(item.change) }}
-                <i v-if="isFinite(item.change)" :class="item.change >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
-                <i v-else class="fas fa-infinity"></i>
+                <i v-if="isFinite(item.change) && item.change !== 0"
+                  :class="item.change > 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
+                <i v-else-if="item.change === Infinity" class="fas fa-infinity"></i>
               </span>
             </div>
           </div>
-          <div class="axis" :style="{ paddingLeft: '195px' }">
-            <span v-for="tick in axisTicks" :key="tick">{{ tick }}</span>
+          <div class="axis" :style="{ paddingLeft: '200px' }"> <span v-for="tick in axisTicks" :key="tick">{{ tick
+              }}</span>
           </div>
           <div class="legend">
             <span class="legend-item"><span class="color-box current"></span> Volume no Período Atual</span>
@@ -95,25 +115,15 @@ const getTopicFromText = (text) => {
   return 'Geral';
 };
 
+// ATUALIZADO: Usa 'filteredPublications' e 'parsedDate'
 const processedDataByDate = computed(() => {
-  const publications = dataStore.publications;
+  // USA OS DADOS JÁ FILTRADOS PELOS FILTROS GLOBAIS
+  const publications = dataStore.filteredPublications;
   if (!publications || publications.length === 0) return [];
-
-  const yearCounts = {};
-  publications.forEach(post => {
-    const yearMatch = (post.date || '').match(/\d{4}/);
-    if (yearMatch) {
-      const year = yearMatch[0];
-      yearCounts[year] = (yearCounts[year] || 0) + 1;
-    }
-  });
-  const referenceYear = Object.keys(yearCounts).length > 0
-    ? Object.keys(yearCounts).reduce((a, b) => yearCounts[a] > yearCounts[b] ? a : b)
-    : new Date().getFullYear();
 
   const topicMentions = [];
   publications.forEach(post => {
-    const date = safeParseDate(post.date, referenceYear);
+    const date = post.parsedDate; // Usa data processada
     if (!date) return;
 
     const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
@@ -131,6 +141,9 @@ const trendData = computed(() => {
   const allMentions = processedDataByDate.value;
   if (allMentions.length === 0) return [];
 
+  // A "última data" é a data mais recente NOS DADOS FILTRADOS
+  // Se o usuário filtrou por uma data fim, ela será o limite.
+  // Se não, será a última data dos dados.
   const latestDateInData = new Date(
     Math.max(...allMentions.map(mention => mention.date.getTime()))
   );
@@ -138,9 +151,9 @@ const trendData = computed(() => {
   const margin = Number(timeMarginInDays.value);
 
   const currentPeriodEnd = latestDateInData;
-  const currentPeriodStart = new Date(currentPeriodEnd.getTime() - margin * 24 * 60 * 60 * 1000);
-  const previousPeriodEnd = currentPeriodStart;
-  const previousPeriodStart = new Date(previousPeriodEnd.getTime() - margin * 24 * 60 * 60 * 1000);
+  const currentPeriodStart = new Date(currentPeriodEnd.getTime() - (margin - 1) * 24 * 60 * 60 * 1000);
+  const previousPeriodEnd = new Date(currentPeriodStart.getTime() - 1 * 24 * 60 * 60 * 1000);
+  const previousPeriodStart = new Date(previousPeriodEnd.getTime() - (margin - 1) * 24 * 60 * 60 * 1000);
 
   const topicCounts = {};
   Object.keys(TOPIC_CONFIG).forEach(topic => {
@@ -148,10 +161,13 @@ const trendData = computed(() => {
   });
 
   allMentions.forEach(({ date, topic }) => {
-    if (date >= currentPeriodStart && date <= currentPeriodEnd) {
-      topicCounts[topic].current++;
-    } else if (date >= previousPeriodStart && date < previousPeriodEnd) {
-      topicCounts[topic].previous++;
+    // Normaliza datas para ignorar horas/minutos
+    const mentionDate = new Date(date.setHours(0, 0, 0, 0));
+
+    if (mentionDate >= currentPeriodStart && mentionDate <= currentPeriodEnd) {
+      if (topicCounts[topic]) topicCounts[topic].current++;
+    } else if (mentionDate >= previousPeriodStart && mentionDate <= previousPeriodEnd) {
+      if (topicCounts[topic]) topicCounts[topic].previous++;
     }
   });
 
@@ -180,27 +196,11 @@ const trendData = computed(() => {
     .sort((a, b) => b.current - a.current);
 });
 
-const safeParseDate = (dateString, referenceYear) => {
-  try {
-    if (!dateString || !dateString.includes('-')) return null;
-    const parts = dateString.split('-');
-    if (parts.length === 2) {
-      return new Date(`${referenceYear}-${parts[0]}-${parts[1]}`);
-    }
-    const yearMatch = dateString.match(/\d{4}/);
-    if (yearMatch) {
-      return new Date(dateString);
-    }
-    return null;
-  } catch (e) {
-    return null;
-  }
-};
-
 const axisTicks = computed(() => {
   if (trendData.value.length === 0) return [0, 0, 0, 0, 0];
   const maxVolume = Math.max(...trendData.value.flatMap(v => [v.current, v.previous]), 1);
   const niceMaxValue = Math.ceil(maxVolume / 4) * 4;
+  if (niceMaxValue === 0) return [0, 0, 0, 0, 0];
   return Array.from({ length: 5 }, (_, i) => Math.round(i * (niceMaxValue / 4)));
 });
 
@@ -225,6 +225,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Use os mesmos estilos de OpinioesView.vue, mas com as adições */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -247,7 +248,7 @@ onMounted(() => {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   gap: 1rem;
 }
 
@@ -268,6 +269,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
+  background-color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
 }
 
 .file-selector label {
@@ -283,7 +288,50 @@ onMounted(() => {
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
+  text-transform: capitalize;
 }
+
+/* NOVOS ESTILOS PARA FILTRO */
+.filter-bar {
+  display: flex;
+  gap: 1.5rem;
+  background-color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.filter-group input[type="date"],
+.filter-group select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: #fff;
+  color: var(--text-primary);
+}
+
+.filter-group input:disabled,
+.filter-group select:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+/* FIM DOS NOVOS ESTILOS */
 
 .chart-card {
   background-color: #fff;
@@ -437,6 +485,17 @@ onMounted(() => {
   color: var(--text-secondary);
   font-size: 1.2rem;
   text-align: center;
+}
+
+.feedback-state pre {
+  background-color: #fdd;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  max-width: 80%;
+  overflow-x: auto;
+  text-align: left;
 }
 
 @media (max-width: 768px) {

@@ -7,6 +7,7 @@ import OpinioesView from '../views/OpinioesView.vue'
 import EmocoesView from '../views/EmocoesView.vue'
 import TopicosView from '../views/TopicosView.vue'
 import TendenciasView from '../views/TendenciasView.vue'
+import PublicacoesView from '../views/PublicacoesView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -22,6 +23,7 @@ const router = createRouter({
         { path: 'emocoes', name: 'emocoes', component: EmocoesView },
         { path: 'topicos', name: 'topicos', component: TopicosView },
         { path: 'tendencias', name: 'tendencias', component: TendenciasView },
+        { path: 'publicacoes', name: 'publicacoes', component: PublicacoesView },
       ],
     },
   ],

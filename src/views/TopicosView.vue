@@ -13,6 +13,24 @@
       </div>
     </header>
 
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="start-date">Data Início:</label>
+        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading">
+      </div>
+      <div class="filter-group">
+        <label for="end-date">Data Fim:</label>
+        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading">
+      </div>
+      <div class="filter-group">
+        <label for="tag-select">Filtrar por Tag:</label>
+        <select id="tag-select" v-model="dataStore.selectedTag" :disabled="dataStore.loading">
+          <option v-for="tag in dataStore.allTags" :key="tag" :value="tag">
+            {{ tag }}
+          </option>
+        </select>
+      </div>
+    </div>
     <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state">
         <div class="spinner"></div>
@@ -21,6 +39,7 @@
 
       <div v-else-if="dataStore.error" class="feedback-state error">
         <p>Ocorreu um erro ao carregar os dados.</p>
+        <pre>{{ dataStore.error }}</pre>
       </div>
 
       <div v-else-if="processedData.length > 0" class="dashboard-grid-topicos">
@@ -50,7 +69,7 @@
       </div>
 
       <div v-else class="feedback-state">
-        <p>Nenhum dado encontrado para a fonte selecionada.</p>
+        <p>Nenhum dado encontrado para os filtros selecionados.</p>
       </div>
     </main>
   </div>
@@ -84,20 +103,6 @@ const allTopics = ref(Object.keys(TOPIC_CONFIG));
 const allEmotions = ref(Object.keys(EMOTION_CONFIG));
 const selectedTopicForWordCloud = ref(allTopics.value[0]);
 
-const safeParseDate = (dateString) => {
-  try {
-    if (!dateString || !dateString.includes('-')) return null;
-    const parts = dateString.split('-');
-    if (parts.length === 2) {
-      const currentYear = new Date().getFullYear();
-      return new Date(`${currentYear}-${parts[0]}-${parts[1]}`);
-    }
-    return new Date(dateString);
-  } catch (e) {
-    return null;
-  }
-};
-
 const getTopicFromText = (text) => {
   if (!text) return 'Geral';
   const lowerText = text.toLowerCase();
@@ -120,10 +125,11 @@ const getEmotionFromText = (text) => {
   return 'Neutro';
 };
 
+// ATUALIZADO: Usa 'filteredPublications' e 'parsedDate'
 const processedData = computed(() => {
-  return dataStore.publications.flatMap(post => {
+  return dataStore.filteredPublications.flatMap(post => {
     const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
-    const date = safeParseDate(post.date);
+    const date = post.parsedDate;
     if (!date) return [];
 
     return allPostComments.map(comment => ({
@@ -146,7 +152,9 @@ const stackedAreaData = computed(() => {
   processedData.value.forEach(p => {
     if (!dataByDate[p.date]) dataByDate[p.date] = {};
     allTopics.value.forEach(topic => dataByDate[p.date][topic] = dataByDate[p.date][topic] || 0);
-    dataByDate[p.date][p.topic]++;
+    if (dataByDate[p.date][p.topic] !== undefined) {
+      dataByDate[p.date][p.topic]++;
+    }
   });
   const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b));
   return {
@@ -210,10 +218,11 @@ const wordCloudData = computed(() => {
 });
 
 const stackedAreaOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { stacked: true } }, plugins: { legend: { position: 'top' } } };
-const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { x: { stacked: true }, y: { stacked: true } } };
+const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { x: { stacked: false }, y: { stacked: false } } }; // Desativado stacked para grouped
 </script>
 
 <style scoped>
+/* Use os mesmos estilos de OpinioesView.vue */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -236,7 +245,8 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
+  /* Ajustado */
   gap: 1rem;
 }
 
@@ -272,6 +282,48 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   cursor: pointer;
   text-transform: capitalize;
 }
+
+/* NOVOS ESTILOS PARA FILTRO */
+.filter-bar {
+  display: flex;
+  gap: 1.5rem;
+  background-color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.filter-group input[type="date"],
+.filter-group select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: #fff;
+  color: var(--text-primary);
+}
+
+.filter-group input:disabled,
+.filter-group select:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+/* FIM DOS NOVOS ESTILOS */
 
 .dashboard-grid-topicos {
   display: grid;
@@ -309,6 +361,7 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   padding: 0.5rem;
   border-radius: 6px;
   border: 1px solid var(--border-color);
+  background-color: #fff;
 }
 
 .chart-title {
@@ -348,6 +401,17 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   color: var(--text-secondary);
   font-size: 1.2rem;
   text-align: center;
+}
+
+.feedback-state pre {
+  background-color: #fdd;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  max-width: 80%;
+  overflow-x: auto;
+  text-align: left;
 }
 
 .spinner {

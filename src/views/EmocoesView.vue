@@ -13,6 +13,26 @@
       </div>
     </header>
 
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="start-date">Data Início:</label>
+        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading"
+          :min="dataStore.minDate" :max="dataStore.maxDate">
+      </div>
+      <div class="filter-group">
+        <label for="end-date">Data Fim:</label>
+        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading"
+          :min="dataStore.minDate" :max="dataStore.maxDate">
+      </div>
+      <div class="filter-group">
+        <label for="tag-select">Filtrar por Tag:</label>
+        <select id="tag-select" v-model="dataStore.selectedTag" :disabled="dataStore.loading">
+          <option v-for="tag in dataStore.allTags" :key="tag" :value="tag">
+            {{ tag }}
+          </option>
+        </select>
+      </div>
+    </div>
     <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state">
         <div class="spinner"></div>
@@ -25,97 +45,46 @@
       </div>
 
       <div v-else-if="processedData.length > 0" class="dashboard-grid">
-        <div class="chart-card full-width-card">
-          <div class="card-header">
-            <h2 class="chart-title">Evolução da Intensidade das Emoções (Simulado)</h2>
-            <div class="filter-group">
-              <label for="emotion-filter">Filtrar:</label>
-              <select id="emotion-filter" v-model="selectedEmotion">
-                <option v-for="emotion in allEmotions" :key="emotion" :value="emotion">{{ emotion }}</option>
-              </select>
-            </div>
-          </div>
+        <div class="chart-card">
+          <h2 class="chart-title">Distribuição de Emoções</h2>
           <div class="chart-container">
-            <Line :data="emotionIntensityOverTimeData" :options="lineChartOptions" />
+            <Doughnut :data="emotionDistributionData" :options="doughnutOptions" />
           </div>
         </div>
-
         <div class="chart-card full-width-card">
-          <h2 class="chart-title">Distribuição de Emoção por Região (Simulado)</h2>
-          <div v-if="Object.keys(emotionByRegionData).length > 0" class="geo-charts-container">
-            <div v-for="region in Object.keys(emotionByRegionData)" :key="region" class="doughnut-chart-wrapper">
-              <div class="chart-container">
-                <Doughnut :data="emotionByRegionData[region]" :options="doughnutOptions" />
-              </div>
-              <span class="doughnut-label">{{ region }}</span>
-            </div>
-          </div>
-          <div v-else class="empty-chart-state">
-            <p>Dados de região insuficientes para exibição.</p>
-          </div>
-        </div>
-
-        <div class="chart-card full-width-card">
-          <h2 class="chart-title">Heatmap de Engajamento por Região (Simulado)</h2>
-          <div class="chart-container heatmap-container">
-            <div class="map-background" :style="{ backgroundImage: `url(${brazilMapUrl})` }"></div>
-            <Bubble :data="heatmapData" :options="heatmapOptions" />
+          <h2 class="chart-title">Contagem de Emoções ao Longo do Tempo</h2>
+          <div class="chart-container">
+            <Line :data="emotionOverTimeData" :options="lineChartOptions" />
           </div>
         </div>
       </div>
 
       <div v-else class="feedback-state">
-        <p>Nenhum dado de emoção encontrado para a fonte selecionada.</p>
+        <p>Nenhum dado de emoção encontrado para os filtros selecionados.</p>
       </div>
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
-import { Doughnut, Bubble, Line } from 'vue-chartjs';
-import { Chart as ChartJS, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, LinearScale, CategoryScale } from 'chart.js';
-import brazilMapUrl from '../img/brasil.png';
+import { Doughnut, Line } from 'vue-chartjs';
+import { Chart as ChartJS, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, CategoryScale, LinearScale, Filler } from 'chart.js';
 
-ChartJS.register(Title, Tooltip, Legend, ArcElement, PointElement, LineElement, LinearScale, CategoryScale);
+ChartJS.register(Title, Tooltip, Legend, ArcElement, PointElement, LineElement, CategoryScale, LinearScale, Filler);
 
 const dataStore = useDataStore();
 
+// A lógica de classificação de emoções permanece local
 const EMOTION_CONFIG = {
   Alegria: { color: '#2ecc71', keywords: ['gostei', 'legal', 'tmj', 'parabéns', 'kkkkk', 'unidos', 'sempre', 'dominamos', 'vai corinthians', '🦅', '👊🏼'] },
   Raiva: { color: '#e74c3c', keywords: ['correram', 'vergonha', 'ridículo', 'lixo', 'pior', 'odeio', 'tomaram'] },
   Frustração: { color: '#9b59b6', keywords: ['vingança', 'decepção', 'absurdo', '...'] },
-  Medo: { color: '#f1c40f', keywords: ['medo', 'cuidado', 'receio'] },
   Ansiedade: { color: '#e67e22', keywords: ['esperando', 'logo mais', 'ansioso', 'grupo'] },
   Neutro: { color: '#95a5a6', keywords: [] }
 };
-
-const REGION_POSITIONS = {
-  Norte: { x: -60, y: -5 },
-  Nordeste: { x: -42, y: -10 },
-  'Centro-Oeste': { x: -55, y: -15 },
-  Sudeste: { x: -45, y: -22 },
-  Sul: { x: -50, y: -28 }
-};
-
-const allEmotions = ref(['Todas', ...Object.keys(EMOTION_CONFIG)]);
-const selectedEmotion = ref('Todas');
-const processedData = ref([]);
-
-const safeParseDate = (dateString) => {
-  try {
-    if (!dateString || !dateString.includes('-')) return null;
-    const parts = dateString.split('-');
-    if (parts.length === 2) {
-      const currentYear = new Date().getFullYear();
-      return new Date(`${currentYear}-${parts[0]}-${parts[1]}`);
-    }
-    return new Date(dateString);
-  } catch (e) {
-    return null;
-  }
-};
+const allEmotions = Object.keys(EMOTION_CONFIG);
 
 const getEmotionFromText = (text) => {
   if (!text) return 'Neutro';
@@ -128,91 +97,70 @@ const getEmotionFromText = (text) => {
   return 'Neutro';
 };
 
-watch(() => dataStore.publications, (newPublications) => {
-  if (!newPublications || newPublications.length === 0) {
-    processedData.value = [];
-    return;
-  }
-  const regions = Object.keys(REGION_POSITIONS);
-  const allProcessedData = newPublications.flatMap(post => {
+// ATUALIZADO: Usa 'filteredPublications' e 'parsedDate'
+const processedData = computed(() => {
+  return dataStore.filteredPublications.flatMap(post => {
     const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
-    return allPostComments.map(comment => {
-      const date = safeParseDate(post.date);
-      return {
-        text: comment.text || '',
-        emotion: getEmotionFromText(comment.text),
-        region: regions[Math.floor(Math.random() * regions.length)],
-        intensity: Math.floor(Math.random() * 101),
-        engagement: (Number(post.views) || 0) + (Number(post.likes) || 0),
-        date: date ? date.toISOString().split('T')[0] : null
-      };
-    });
-  }).filter(item => item.date);
-  processedData.value = allProcessedData;
-}, { immediate: true, deep: true });
+    const date = post.parsedDate; // Usa a data já processada
+    if (!date) return [];
 
-const emotionByRegionData = computed(() => {
-  const regionData = {};
-  const emotionLabels = Object.keys(EMOTION_CONFIG);
-  const emotionColors = Object.values(EMOTION_CONFIG).map(e => e.color);
-  processedData.value.forEach(item => {
-    if (!regionData[item.region]) {
-      regionData[item.region] = {
-        labels: emotionLabels,
-        datasets: [{ data: Array(emotionLabels.length).fill(0), backgroundColor: emotionColors }]
-      };
-    }
-    const emotionIndex = emotionLabels.indexOf(item.emotion);
-    if (emotionIndex !== -1) {
-      regionData[item.region].datasets[0].data[emotionIndex]++;
-    }
-  });
-  return regionData;
+    return allPostComments.map(comment => ({
+      date: date.toISOString().split('T')[0],
+      emotion: getEmotionFromText(comment.text || ''),
+    }));
+  }).filter(Boolean); // Filtra qualquer entrada inválida
 });
 
-const heatmapData = computed(() => {
-  const engagementByRegion = {};
-  processedData.value.forEach(item => {
-    engagementByRegion[item.region] = (engagementByRegion[item.region] || 0) + item.engagement;
-  });
-  const maxEngagement = Math.max(...Object.values(engagementByRegion), 1);
-  return {
-    datasets: Object.entries(engagementByRegion).map(([region, totalEngagement]) => {
-      const position = REGION_POSITIONS[region] || { x: 0, y: 0 };
-      const radius = 5 + (totalEngagement / maxEngagement) * 35;
-      return {
-        label: region,
-        data: [{ x: position.x, y: position.y, r: radius }],
-        backgroundColor: 'rgba(231, 76, 60, 0.5)',
-        borderColor: 'rgba(192, 57, 43, 0.8)',
-        borderWidth: 1,
-      };
-    })
-  };
-});
+// GRÁFICO 1: Distribuição de Emoções (REAL)
+const emotionDistributionData = computed(() => {
+  const counts = {};
+  allEmotions.forEach(e => counts[e] = 0);
 
-const emotionIntensityOverTimeData = computed(() => {
-  const dataByDate = {};
-  const emotionColor = EMOTION_CONFIG[selectedEmotion.value]?.color || '#34495e';
-  const filteredData = selectedEmotion.value === 'Todas' ? processedData.value : processedData.value.filter(item => item.emotion === selectedEmotion.value);
-  filteredData.forEach(item => {
-    if (!dataByDate[item.date]) dataByDate[item.date] = { totalIntensity: 0, count: 0 };
-    dataByDate[item.date].totalIntensity += (Number(item.intensity) || 0);
-    dataByDate[item.date].count++;
+  processedData.value.forEach(item => {
+    if (counts[item.emotion] !== undefined) {
+      counts[item.emotion]++;
+    }
   });
-  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b));
+
   return {
-    labels: sortedDates.map(date => new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
+    labels: allEmotions,
     datasets: [{
-      label: `Intensidade Média (${selectedEmotion.value})`,
-      data: sortedDates.map(d => dataByDate[d].count > 0 ? dataByDate[d].totalIntensity / dataByDate[d].count : 0),
-      borderColor: emotionColor,
-      backgroundColor: `${emotionColor}33`,
-      fill: true,
-      tension: 0.4
+      data: allEmotions.map(e => counts[e]),
+      backgroundColor: allEmotions.map(e => EMOTION_CONFIG[e].color)
     }]
   };
 });
+
+// GRÁFICO 2: Contagem de Emoções ao Longo do Tempo (REAL)
+const emotionOverTimeData = computed(() => {
+  const dataByDate = {};
+
+  processedData.value.forEach(item => {
+    const dateKey = item.date;
+    if (!dataByDate[dateKey]) {
+      dataByDate[dateKey] = {};
+      allEmotions.forEach(e => dataByDate[dateKey][e] = 0);
+    }
+    if (dataByDate[dateKey][item.emotion] !== undefined) {
+      dataByDate[dateKey][item.emotion]++;
+    }
+  });
+
+  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b));
+
+  return {
+    labels: sortedDates.map(date => new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
+    datasets: allEmotions.map(emotion => ({
+      label: emotion,
+      data: sortedDates.map(date => dataByDate[date][emotion]),
+      borderColor: EMOTION_CONFIG[emotion].color,
+      backgroundColor: `${EMOTION_CONFIG[emotion].color}33`, // Cor com transparência
+      fill: true,
+      tension: 0.4
+    }))
+  };
+});
+
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
@@ -220,29 +168,14 @@ onMounted(() => {
   }
 });
 
-const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#2c3e50', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6, } } };
-const lineChartOptions = { ...baseChartOptions, plugins: { ...baseChartOptions.plugins, legend: { display: true, position: 'top', align: 'end' } }, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { grid: { color: '#ecf0f1' }, ticks: { color: '#555' } } } };
-const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
-const heatmapOptions = {
-  ...baseChartOptions,
-  plugins: {
-    ...baseChartOptions.plugins,
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: (context) => {
-          const label = context.dataset.label || '';
-          const engagement = context.raw.r;
-          return `${label}: Raio ~ ${engagement.toFixed(2)}`;
-        }
-      }
-    }
-  },
-  scales: { x: { display: false, min: -75, max: -35 }, y: { display: false, min: -35, max: 5 } }
-};
+// Opções dos gráficos
+const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' }, tooltip: { backgroundColor: '#2c3e50', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6, } } };
+const lineChartOptions = { ...baseChartOptions, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { grid: { color: '#ecf0f1' }, ticks: { color: '#555' } } } };
+const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } };
 </script>
 
 <style scoped>
+/* Use os mesmos estilos de OpinioesView.vue */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -265,7 +198,8 @@ const heatmapOptions = {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
+  /* Ajustado */
   gap: 1rem;
 }
 
@@ -286,14 +220,12 @@ const heatmapOptions = {
   box-shadow: var(--shadow);
 }
 
-.file-selector label,
-.filter-group label {
+.file-selector label {
   font-weight: 500;
   color: var(--text-secondary);
 }
 
-.file-selector select,
-.filter-group select {
+.file-selector select {
   padding: .6rem 1rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -305,14 +237,61 @@ const heatmapOptions = {
   text-transform: capitalize;
 }
 
-.file-selector select:hover,
-.filter-group select:hover {
+.file-selector select:hover {
   border-color: #3498db;
 }
 
+.file-selector select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* NOVOS ESTILOS PARA FILTRO */
+.filter-bar {
+  display: flex;
+  gap: 1.5rem;
+  background-color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.filter-group input[type="date"],
+.filter-group select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: #fff;
+  color: var(--text-primary);
+}
+
+.filter-group input:disabled,
+.filter-group select:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+/* FIM DOS NOVOS ESTILOS */
+
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
+  /* 2 colunas */
   gap: 1.5rem;
 }
 
@@ -321,10 +300,10 @@ const heatmapOptions = {
   padding: 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
+  height: 420px;
   display: flex;
   flex-direction: column;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  min-height: 450px;
 }
 
 .chart-card:hover {
@@ -332,52 +311,17 @@ const heatmapOptions = {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+.full-width-card {
+  grid-column: 1 / -1;
+  /* Ocupa a linha inteira */
 }
 
 .chart-title {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
+  margin-bottom: 1.5rem;
   color: var(--text-primary);
-  margin: 0;
-  text-align: left;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.geo-charts-container {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2rem;
-  flex-grow: 1;
-  padding: 1rem 0;
-}
-
-.doughnut-chart-wrapper {
-  width: 150px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  flex-grow: 1;
-}
-
-.doughnut-label {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 1rem;
+  text-align: center;
 }
 
 .chart-container {
@@ -387,40 +331,21 @@ const heatmapOptions = {
   width: 100%;
 }
 
-.heatmap-container {
-  position: relative;
-  flex-grow: 1;
-}
-
-.map-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  opacity: 0.15;
-  pointer-events: none;
-}
-
 .feedback-state {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: 60vh;
+  min-height: 50vh;
   color: var(--text-secondary);
   font-size: 1.2rem;
-  text-align: center;
 }
 
 .feedback-state.error p {
   color: #c0392b;
 }
 
-.feedback-state.error pre {
+.feedback-state pre {
   background-color: #fdd;
   padding: 1rem;
   border-radius: 8px;
@@ -447,16 +372,9 @@ const heatmapOptions = {
   }
 }
 
-@media (max-width: 768px) {
-
-  .header-controls,
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .main-title {
-    font-size: 1.75rem;
+@media (max-width: 992px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

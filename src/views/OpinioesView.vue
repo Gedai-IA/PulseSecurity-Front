@@ -13,6 +13,24 @@
       </div>
     </header>
 
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="start-date">Data Início:</label>
+        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading">
+      </div>
+      <div class="filter-group">
+        <label for="end-date">Data Fim:</label>
+        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading">
+      </div>
+      <div class="filter-group">
+        <label for="tag-select">Filtrar por Tag:</label>
+        <select id="tag-select" v-model="dataStore.selectedTag" :disabled="dataStore.loading">
+          <option v-for="tag in dataStore.allTags" :key="tag" :value="tag">
+            {{ tag }}
+          </option>
+        </select>
+      </div>
+    </div>
     <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state">
         <div class="spinner"></div>
@@ -21,9 +39,10 @@
 
       <div v-else-if="dataStore.error" class="feedback-state error">
         <p>Ocorreu um erro ao carregar os dados.</p>
+        <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-else-if="dataStore.publications.length > 0" class="dashboard-grid">
+      <div v-else-if="dataStore.filteredPublications.length > 0" class="dashboard-grid">
         <div class="chart-card full-width-card">
           <h2 class="chart-title">Publicações ao Longo do Tempo</h2>
           <Line v-if="postsOverTimeData.labels.length" :data="postsOverTimeData" :options="chartOptions" />
@@ -55,7 +74,7 @@
       </div>
 
       <div v-else class="feedback-state">
-        <p>Nenhum dado encontrado para a fonte selecionada.</p>
+        <p>Nenhum dado encontrado para os filtros selecionados.</p>
       </div>
     </main>
   </div>
@@ -74,23 +93,9 @@ const dataStore = useDataStore();
 const positiveWords = ['bom', 'ótimo', 'gostei', 'legal', 'sempre', 'unidos', 'tmj', 'parabéns', 'excelente', 'adorei', 'incrível', 'sucesso', 'sempre', 'dominamos', 'vai corinthians'];
 const negativeWords = ['correram', 'vergonha', 'ridículo', 'morte', 'pagar', 'vingança', 'lixo', 'pior', 'odeio', 'péssimo', 'decepção', 'absurdo', 'tomaram'];
 
-const safeParseDate = (dateString) => {
-  try {
-    if (!dateString || !dateString.includes('-')) return null;
-    const parts = dateString.split('-');
-    if (parts.length === 2) {
-      const currentYear = new Date().getFullYear();
-      return new Date(`${currentYear}-${parts[0]}-${parts[1]}`);
-    }
-    return new Date(dateString);
-  } catch (e) {
-    console.warn("Formato de data inválido:", dateString);
-    return null;
-  }
-};
-
+// ATUALIZADO: Usa 'filteredPublications'
 const allCommentsAndReplies = computed(() => {
-  return dataStore.publications.flatMap(p =>
+  return dataStore.filteredPublications.flatMap(p =>
     (p.comments || []).flatMap(c => [c, ...(c.replies || [])])
   );
 });
@@ -123,7 +128,9 @@ const sentimentData = computed(() => {
 const wordFrequencyData = computed(() => {
   const stopwords = new Set(['de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'é', 'com', 'não', 'uma', 'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao', 'ser', 'ter', 'ele', 'ela', 'nós', 'vc', 'vcs', 'tá']);
   const wordCounts = {};
-  const allText = dataStore.publications.map(p => {
+
+  // ATUALIZADO: Usa 'filteredPublications'
+  const allText = dataStore.filteredPublications.map(p => {
     const description = p.description || '';
     const commentsText = (p.comments || []).flatMap(c => [c.text, ...(c.replies || []).map(r => r.text)]).join(' ');
     return `${description} ${commentsText}`;
@@ -139,7 +146,8 @@ const wordFrequencyData = computed(() => {
 });
 
 const totalEngagementData = computed(() => {
-  const totals = dataStore.publications.reduce((acc, post) => {
+  // ATUALIZADO: Usa 'filteredPublications'
+  const totals = dataStore.filteredPublications.reduce((acc, post) => {
     acc.views += Number(post.views) || 0;
     acc.likes += Number(post.likes) || 0;
     acc.comments += Number(post.comments_count) || 0;
@@ -156,8 +164,9 @@ const totalEngagementData = computed(() => {
 
 const postsOverTimeData = computed(() => {
   const countsByDate = {};
-  dataStore.publications.forEach(post => {
-    const date = safeParseDate(post.date);
+  // ATUALIZADO: Usa 'filteredPublications' e 'parsedDate'
+  dataStore.filteredPublications.forEach(post => {
+    const date = post.parsedDate; // Usa a data já processada
     if (date) {
       const dateKey = date.toISOString().split('T')[0];
       countsByDate[dateKey] = (countsByDate[dateKey] || 0) + 1;
@@ -174,7 +183,8 @@ const postsOverTimeData = computed(() => {
 
 const topTagsData = computed(() => {
   const tagCounts = {};
-  dataStore.publications.flatMap(p => p.tags || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
+  // ATUALIZADO: Usa 'filteredPublications'
+  dataStore.filteredPublications.flatMap(p => p.tags || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
   const sortedTags = Object.entries(tagCounts).sort(([, a], [, b]) => b - a).slice(0, 10);
 
   return {
@@ -184,7 +194,8 @@ const topTagsData = computed(() => {
 });
 
 const engagementCorrelationData = computed(() => {
-  const data = dataStore.publications.map(post => ({
+  // ATUALIZADO: Usa 'filteredPublications'
+  const data = dataStore.filteredPublications.map(post => ({
     x: Number(post.views) || 0,
     y: Number(post.likes) || 0,
     r: (Number(post.comments_count) || 0) * 0.5 + 5
@@ -195,6 +206,7 @@ const engagementCorrelationData = computed(() => {
   };
 });
 
+// Opções dos gráficos
 const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 } }, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { grid: { color: '#eee' }, ticks: { color: '#555' } } } };
 const chartOptions = { ...baseChartOptions };
 const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#555', font: { size: 12 }, padding: 20 } } } };
@@ -203,6 +215,7 @@ const bubbleChartOptions = { ...baseChartOptions, plugins: { ...baseChartOptions
 </script>
 
 <style scoped>
+/* Copie os estilos do seu arquivo original */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -225,7 +238,8 @@ const bubbleChartOptions = { ...baseChartOptions, plugins: { ...baseChartOptions
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
+  /* Ajustado */
   gap: 1rem;
 }
 
@@ -271,6 +285,48 @@ const bubbleChartOptions = { ...baseChartOptions, plugins: { ...baseChartOptions
   cursor: not-allowed;
   opacity: 0.6;
 }
+
+/* NOVOS ESTILOS PARA FILTRO */
+.filter-bar {
+  display: flex;
+  gap: 1.5rem;
+  background-color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.filter-group input[type="date"],
+.filter-group select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: #fff;
+  color: var(--text-primary);
+}
+
+.filter-group input:disabled,
+.filter-group select:disabled {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+/* FIM DOS NOVOS ESTILOS */
 
 .dashboard-grid {
   display: grid;
@@ -326,6 +382,17 @@ const bubbleChartOptions = { ...baseChartOptions, plugins: { ...baseChartOptions
 
 .feedback-state.error p {
   color: #c0392b;
+}
+
+.feedback-state pre {
+  background-color: #fdd;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  max-width: 80%;
+  overflow-x: auto;
+  text-align: left;
 }
 
 .spinner {
