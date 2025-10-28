@@ -14,26 +14,35 @@
     </header>
 
     <div class="filter-bar">
+      <div class="filter-group search-group">
+        <i class="fas fa-search search-icon"></i>
+        <input type="search" v-model="searchTerm" placeholder="Pesquisar por descrição ou #ID..." class="search-input">
+      </div>
+
       <div class="filter-group">
-        <label for="start-date">Data Início:</label>
+        <label for="start-date">De:</label>
         <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading"
           :min="dataStore.minDate" :max="dataStore.maxDate">
       </div>
       <div class="filter-group">
-        <label for="end-date">Data Fim:</label>
+        <label for="end-date">Até:</label>
         <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading"
           :min="dataStore.minDate" :max="dataStore.maxDate">
       </div>
       <div class="filter-group">
-        <label for="tag-select">Filtrar por Tag:</label>
+        <label for="tag-select">Tag:</label>
         <select id="tag-select" v-model="dataStore.selectedTag" :disabled="dataStore.loading">
           <option v-for="tag in dataStore.allTags" :key="tag" :value="tag">
             {{ tag }}
           </option>
         </select>
       </div>
+
+      <div class="filter-group results-group">
+        <span class="results-count">{{ searchedPublications.length }} resultado(s)</span>
+      </div>
       <div class="filter-group reset-group">
-        <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading">
+        <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading" title="Limpar Filtros">
           <i class="fas fa-undo"></i>
           <span>Limpar</span>
         </button>
@@ -49,12 +58,6 @@
       <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
-      </div>
-
-      <div class="local-search-bar">
-        <i class="fas fa-search search-icon"></i>
-        <input type="search" v-model="searchTerm" placeholder="Pesquisar por descrição ou #ID..." class="search-input">
-        <span class="results-count">{{ searchedPublications.length }} resultado(s)</span>
       </div>
 
       <div v-if="searchedPublications.length > 0" class="pub-list">
@@ -86,8 +89,13 @@
           <button @click="closeModal" class="btn-close">&times;</button>
         </div>
         <div class="modal-body">
-          <p><strong>Link:</strong> <a :href="selectedPublication.link" target="_blank" rel="noopener noreferrer">{{
-            selectedPublication.link }}</a></p>
+          <a :href="selectedPublication.url" target="_blank" rel="noopener noreferrer" class="btn-tiktok">
+            <svg class="tiktok-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor">
+              <path
+                d="M448 209.91a210.06 210.06 0 0 1-122.77-39.25V349.38A162.55 162.55 0 1 1 185 188.31V278.2a74.62 74.62 0 1 0 52.23 71.18V0l88 0a121.18 121.18 0 0 0 1.86 22.17h0A122.18 122.18 0 0 0 381 102.39a121.43 121.43 0 0 0 67 20.14z" />
+            </svg>
+            <span>Visualizar no TikTok</span>
+          </a>
           <p><strong>Descrição:</strong> {{ selectedPublication.description || 'N/A' }}</p>
           <p><strong>Música:</strong> {{ selectedPublication.musicTitle || 'N/A' }}</p>
 
@@ -141,7 +149,11 @@ onMounted(() => {
 });
 
 const resetAllFilters = () => {
-  dataStore.resetFilters();
+  // dataStore.resetFilters(); // Supondo que você tenha esta função no seu store
+  // Se não tiver, apenas reset os valores:
+  dataStore.startDate = dataStore.minDate;
+  dataStore.endDate = dataStore.maxDate;
+  dataStore.selectedTag = 'Todas';
   searchTerm.value = '';
 };
 
@@ -174,17 +186,22 @@ const formatNumber = (numStr) => {
 </script>
 
 <style scoped>
-:root {
+/* CSS REATORADO E SIMPLIFICADO.
+  As variáveis :root foram movidas para .dashboard-page
+  para funcionar corretamente dentro de <style scoped>.
+*/
+.dashboard-page {
+  /* Variáveis CSS movidas para cá para escopo */
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
   --text-primary: #2c3e50;
   --text-secondary: #555;
+  --text-light: #7f8c8d;
   --border-color: #e0e0e0;
+  --primary-color: #3498db;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
   --border-radius: 12px;
-}
 
-.dashboard-page {
   padding: 1rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
@@ -238,9 +255,12 @@ const formatNumber = (numStr) => {
   width: 100%;
 }
 
+/* --- BARRA DE FILTRO UNIFICADA (NOVOS ESTILOS) --- */
 .filter-bar {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  /* Permite que os itens quebrem a linha em telas menores */
+  align-items: center;
   gap: 1rem;
   background-color: #fff;
   padding: 1rem;
@@ -251,21 +271,21 @@ const formatNumber = (numStr) => {
 
 .filter-group {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
-  width: 100%;
 }
 
 .filter-group label {
   font-weight: 500;
   color: var(--text-secondary);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
+/* Estilos unificados para inputs e selects na barra de filtro */
 .filter-group input[type="date"],
-.filter-group select {
-  width: 100%;
+.filter-group select,
+.filter-group .search-input {
   box-sizing: border-box;
   padding: 0.6rem 0.6rem;
   border: 1px solid var(--border-color);
@@ -273,6 +293,8 @@ const formatNumber = (numStr) => {
   font-size: 0.9rem;
   background-color: #fff;
   color: var(--text-primary);
+  height: 40px;
+  /* Altura fixa para alinhamento */
 }
 
 .filter-group input:disabled,
@@ -281,10 +303,45 @@ const formatNumber = (numStr) => {
   cursor: not-allowed;
 }
 
-.reset-group {
-  align-items: flex-end;
+/* Grupo de Pesquisa (principal) */
+.search-group {
+  flex-grow: 1;
+  /* Faz a pesquisa ocupar o espaço disponível */
+  min-width: 250px;
+  /* Largura mínima antes de quebrar a linha */
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0 0.5rem;
+  background-color: #fff;
 }
 
+.search-group .search-icon {
+  color: var(--text-light);
+  padding-left: 0.25rem;
+}
+
+.search-group .search-input {
+  flex-grow: 1;
+  border: none;
+  outline: none;
+  height: 38px;
+  padding-left: 0.5rem;
+}
+
+.search-group .search-input::placeholder {
+  color: var(--text-light);
+}
+
+/* Grupo de Resultados (à direita) */
+.results-group {
+  margin-left: auto;
+  /* Empurra para a direita */
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+/* Botão de Reset */
 .reset-btn {
   display: flex;
   align-items: center;
@@ -298,8 +355,7 @@ const formatNumber = (numStr) => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.2s ease;
-  width: 100%;
-  justify-content: center;
+  height: 40px;
 }
 
 .reset-btn:hover:not(:disabled) {
@@ -311,11 +367,15 @@ const formatNumber = (numStr) => {
   cursor: not-allowed;
 }
 
+/* --- FIM DA BARRA DE FILTRO --- */
+
+
 .dashboard-content {
   position: relative;
   min-height: 400px;
 }
 
+/* Estados de Feedback (Loading, Erro, Sem Dados) */
 .feedback-state {
   display: flex;
   flex-direction: column;
@@ -370,7 +430,7 @@ const formatNumber = (numStr) => {
   width: 50px;
   height: 50px;
   border: 5px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #3498db;
+  border-left-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -382,48 +442,7 @@ const formatNumber = (numStr) => {
   }
 }
 
-.local-search-bar {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  background-color: #fff;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  padding: 0.75rem 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.search-icon {
-  display: none;
-}
-
-.search-input {
-  width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 0.6rem 0.6rem;
-  font-size: 1rem;
-  color: var(--text-primary);
-  box-sizing: border-box;
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #3498db;
-}
-
-.search-input::placeholder {
-  color: #aaa;
-}
-
-.results-count {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  align-self: flex-end;
-}
-
+/* --- Lista de Cards --- */
 .pub-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -434,10 +453,12 @@ const formatNumber = (numStr) => {
   background: var(--card-bg);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  padding: 1.5rem;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  gap: 0.75rem;
+  /* Espaçamento interno */
 }
 
 .pub-card:hover {
@@ -449,7 +470,6 @@ const formatNumber = (numStr) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
 }
 
 .pub-id {
@@ -471,7 +491,7 @@ const formatNumber = (numStr) => {
   color: var(--text-secondary);
   line-height: 1.5;
   flex-grow: 1;
-  margin-bottom: 1rem;
+  margin: 0;
 }
 
 .pub-stats {
@@ -480,7 +500,6 @@ const formatNumber = (numStr) => {
   gap: 1rem;
   color: var(--text-secondary);
   font-size: 0.9rem;
-  margin-bottom: 1.5rem;
 }
 
 .pub-stats span {
@@ -490,10 +509,10 @@ const formatNumber = (numStr) => {
 }
 
 .btn-details {
-  background-color: #3498db;
+  background-color: var(--primary-color);
   color: #fff;
   border: none;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
   border-radius: 8px;
   font-weight: 600;
   font-size: 0.9rem;
@@ -506,6 +525,7 @@ const formatNumber = (numStr) => {
   background-color: #2980b9;
 }
 
+/* --- Modal --- */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -536,7 +556,7 @@ const formatNumber = (numStr) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
+  padding: 1.5rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -557,7 +577,7 @@ const formatNumber = (numStr) => {
 }
 
 .modal-body {
-  padding: 1rem 2rem;
+  padding: 1.5rem;
   overflow-y: auto;
   line-height: 1.6;
 }
@@ -567,7 +587,7 @@ const formatNumber = (numStr) => {
 }
 
 .modal-body a {
-  color: #3498db;
+  color: var(--primary-color);
   text-decoration: none;
   word-break: break-all;
 }
@@ -611,7 +631,8 @@ const formatNumber = (numStr) => {
 }
 
 .comment-list {
-  max-height: 250px;
+  max-height: 200px;
+  /* Diminuído */
   overflow-y: auto;
   border-top: 1px solid var(--border-color);
   margin-top: 1rem;
@@ -647,29 +668,65 @@ const formatNumber = (numStr) => {
   margin-top: 0.5rem;
 }
 
-@media (min-width: 576px) {
+/* Botão TikTok (Sem alteração) */
+.btn-tiktok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background-color: #000000;
+  color: #ffffff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+  margin-bottom: 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-tiktok:hover {
+  background-color: #2a2a2a;
+}
+
+.btn-tiktok .tiktok-icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+
+/* --- Media Queries --- */
+@media (max-width: 768px) {
+
+  /* Em telas pequenas, força os grupos de filtro (exceto pesquisa) a terem largura total */
+  .filter-group:not(.search-group) {
+    width: 100%;
+  }
+
+  .filter-group input[type="date"],
+  .filter-group select {
+    width: 100%;
+  }
+
+  /* Empurra o reset e a contagem para a próxima linha */
+  .results-group {
+    margin-left: 0;
+    order: 98;
+    /* Ordem do flex */
+  }
+
+  .reset-group {
+    width: 100%;
+    order: 99;
+  }
+
   .reset-btn {
-    width: auto;
-  }
-
-  .local-search-bar {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .search-icon {
-    display: block;
-    color: var(--text-secondary);
-    font-size: 1.1rem;
-    margin-right: 1rem;
-  }
-
-  .search-input {
-    flex-grow: 1;
-    border: none;
-    outline: none;
-    font-size: 1.1rem;
-    padding: 0;
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -695,32 +752,6 @@ const formatNumber = (numStr) => {
   .file-selector select {
     width: auto;
     min-width: 200px;
-  }
-
-  .filter-bar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    padding: 1rem 1.5rem;
-  }
-
-  .filter-group {
-    flex-direction: row;
-    align-items: center;
-    width: auto;
-  }
-
-  .filter-group input[type="date"],
-  .filter-group select {
-    width: auto;
-  }
-
-  .reset-group {
-    align-self: flex-end;
-  }
-
-  .reset-btn {
-    width: auto;
   }
 
   .pub-list {

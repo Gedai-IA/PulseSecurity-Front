@@ -55,14 +55,27 @@
         </div>
 
         <div class="chart-card">
-          <h2 class="chart-title">Análise de Sentimentos</h2>
-          <Doughnut v-if="sentimentData.labels.length" :data="sentimentData" :options="doughnutOptions" />
+          <div class="chart-header">
+            <h2 class="chart-title">Análise de Emoções</h2>
+            <button v-if="selectedEmotion" @click="resetEmotionFilter" class="btn-reset-chart">
+              Limpar
+            </button>
+          </div>
+          <Doughnut v-if="sentimentData.labels.length" :data="sentimentData" :options="doughnutOptions"
+            @click="handleDoughnutClick" ref="doughnutChartRef" />
         </div>
+
         <div class="chart-card">
-          <h2 class="chart-title">Total de Engajamento</h2>
-          <Bar v-if="totalEngagementData.datasets[0]?.data.length" :data="totalEngagementData"
+          <div class="chart-header">
+            <h2 class="chart-title">
+              {{ selectedEmotion ? `Emoção "${selectedEmotion}" ao Longo do Tempo` : 'Emoções ao Longo do Tempo' }}
+            </h2>
+          </div>
+          <Line v-if="finalEmotionsOverTimeData.labels.length" :data="finalEmotionsOverTimeData"
             :options="chartOptions" />
+          <div v-else class="no-chart-data">Sem dados de emoção para exibir.</div>
         </div>
+
         <div class="chart-card">
           <h2 class="chart-title">Correlação: Views vs. Likes</h2>
           <Bubble v-if="engagementCorrelationData.datasets[0]?.data.length" :data="engagementCorrelationData"
@@ -73,6 +86,7 @@
           <h2 class="chart-title">Top 10 Palavras Mais Frequentes</h2>
           <Bar v-if="wordFrequencyData.labels.length" :data="wordFrequencyData" :options="horizontalBarOptions" />
         </div>
+
         <div class="chart-card medium-width-card">
           <h2 class="chart-title">Top 10 Tags Mais Utilizadas</h2>
           <Bar v-if="topTagsData.labels.length" :data="topTagsData" :options="horizontalBarOptions" />
@@ -87,23 +101,72 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+// Imports atualizados
+import { computed, onMounted, ref } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
 import { Bar, Line, Bubble, Doughnut } from 'vue-chartjs';
-import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement } from 'chart.js';
+// Imports de ChartJS (adicionado BubbleController)
+import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BubbleController } from 'chart.js';
+// Import para interatividade do gráfico
+import { getElementAtEvent } from 'vue-chartjs';
 
-ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement);
+// Registra todos os componentes necessários
+ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BubbleController);
 
 const dataStore = useDataStore();
 
-const positiveWords = ['bom', 'ótimo', 'gostei', 'legal', 'sempre', 'unidos', 'tmj', 'parabéns', 'excelente', 'adorei', 'incrível', 'sucesso', 'sempre', 'dominamos', 'vai corinthians'];
-const negativeWords = ['correram', 'vergonha', 'ridículo', 'morte', 'pagar', 'vingança', 'lixo', 'pior', 'odeio', 'péssimo', 'decepção', 'absurdo', 'tomaram'];
+// --- 1. Refs para Interatividade (NOVOS) ---
+const doughnutChartRef = ref(null);
+const selectedEmotion = ref(null);
 
-const allCommentsAndReplies = computed(() => {
-  return dataStore.filteredPublications.flatMap(p =>
-    (p.comments || []).flatMap(c => [c, ...(c.replies || [])])
-  );
+// --- 2. Lógica de Emoções (COPIADA DA TELA 'emocoes.vue') ---
+const EMOTION_CONFIG = {
+  Alegria: {
+    color: '#2ecc71',
+    keywords: ['gostei', 'legal', 'tmj', 'parabéns', 'kkkkk', 'unidos', 'sempre', 'dominamos', 'vai corinthians', '🦅', '👊🏼', '⚫⚪', 'respeito', 'obrigado', 'show', 'top', 'massa', 'boa', 'isso', 'vamoo', 'lindo', 'família', 'melhor', 'meu amor', 'é nós', 'parabens', 'orgulho', 'gigante', 'raça', 'campeão', 'vencer']
+  },
+  Raiva: {
+    color: '#e74c3c',
+    keywords: ['correram', 'vergonha', 'ridículo', 'lixo', 'pior', 'odeio', 'tomaram', 'lamentável', 'piada', 'fdp', 'lixo', 'time pequeno', 'some', 'fraco', 'covardes', 'merda', 'vtnc', 'humilhação', 'acabou', 'fora', 'pipoqueiro', 'incompetente', 'desgraça', 'violência', 'briga', 'morte', 'ferido', 'tumulto', 'confusão', 'bomba', 'polícia', 'invasão', 'guerra']
+  },
+  Frustração: {
+    color: '#9b59b6',
+    keywords: ['decepção', 'absurdo', 'paciência', 'desisto', 'difícil', 'complicado', 'não aguento mais', 'de novo', 'sempre a mesma coisa', 'que raiva']
+  },
+  Ansiedade: {
+    color: '#e67e22',
+    keywords: ['esperando', 'ansioso', 'cadê', 'demora', 'logo', 'será que', 'medo', 'temer', 'cuidado']
+  }
+};
+const allEmotions = ['Alegria', 'Raiva', 'Frustração', 'Ansiedade'];
+
+const getEmotion = (text) => {
+  if (!text) return 'Neutro';
+  const lowerText = text.toLowerCase();
+  for (const [emotion, { keywords }] of Object.entries(EMOTION_CONFIG)) {
+    if (keywords.some(keyword => lowerText.includes(keyword))) {
+      return emotion;
+    }
+  }
+  return 'Neutro';
+};
+
+// --- 3. Dados Processados ---
+
+// Helper atualizado para incluir data e emoção, descartando neutros
+const allCommentsWithEmotion = computed(() => {
+  return dataStore.filteredPublications.flatMap(post => {
+    const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
+    const date = post.parsedDate;
+    if (!date) return [];
+
+    return allPostComments.map(comment => ({
+      postDate: date,
+      emotion: getEmotion(comment.text || ''),
+    }));
+  }).filter(item => item.emotion !== 'Neutro'); // <-- DESCARTE DE NEUTRO
 });
+
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
@@ -113,27 +176,83 @@ onMounted(() => {
 
 const resetAllFilters = () => {
   dataStore.resetFilters();
+  resetEmotionFilter(); // <-- Adicionado
 };
 
+// NOVO: Limpa o filtro de emoção
+const resetEmotionFilter = () => {
+  selectedEmotion.value = null;
+};
+
+// NOVO: Handler de clique na Pizza
+const handleDoughnutClick = (event) => {
+  const chart = doughnutChartRef.value?.chart;
+  if (!chart) return;
+  const elements = getElementAtEvent(chart, event);
+  if (elements.length > 0) {
+    const { index } = elements[0];
+    const newEmotion = sentimentData.value.labels[index];
+    selectedEmotion.value = selectedEmotion.value === newEmotion ? null : newEmotion;
+  }
+};
+
+// --- 4. Computeds dos Gráficos ---
+
+// 'sentimentData' (Gráfico de Pizza) - LÓGICA ATUALIZADA
 const sentimentData = computed(() => {
-  const sentimentCounts = { Positivo: 0, Negativo: 0, Neutro: 0 };
-  allCommentsAndReplies.value.forEach(comment => {
-    const text = (comment.text || '').toLowerCase();
-    const positiveScore = positiveWords.filter(word => text.includes(word)).length;
-    const negativeScore = negativeWords.filter(word => text.includes(word)).length;
-    if (positiveScore > negativeScore) sentimentCounts.Positivo++;
-    else if (negativeScore > positiveScore) sentimentCounts.Negativo++;
-    else sentimentCounts.Neutro++;
+  const counts = { Alegria: 0, Raiva: 0, Frustração: 0, Ansiedade: 0 };
+  allCommentsWithEmotion.value.forEach(item => {
+    if (counts[item.emotion] !== undefined) {
+      counts[item.emotion]++;
+    }
   });
   return {
-    labels: ['Positivo', 'Negativo', 'Neutro'],
+    labels: allEmotions,
     datasets: [{
-      data: [sentimentCounts.Positivo, sentimentCounts.Negativo, sentimentCounts.Neutro],
-      backgroundColor: ['#27ae60', '#c0392b', '#2980b9']
+      data: allEmotions.map(e => counts[e]),
+      backgroundColor: allEmotions.map(e => EMOTION_CONFIG[e].color)
     }]
   };
 });
 
+// Dados BASE para o Gráfico de Linha de Emoções (NOVO)
+const emotionsOverTimeData = computed(() => {
+  const dataByDate = {};
+  allCommentsWithEmotion.value.forEach(item => {
+    const dateKey = item.postDate.toISOString().split('T')[0];
+    if (!dataByDate[dateKey]) {
+      dataByDate[dateKey] = { Alegria: 0, Raiva: 0, Frustração: 0, Ansiedade: 0 };
+    }
+    dataByDate[dateKey][item.emotion]++;
+  });
+  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b));
+  return {
+    labels: sortedDates.map(date => new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
+    datasets: allEmotions.map(emotion => ({
+      label: emotion,
+      data: sortedDates.map(date => dataByDate[date][emotion] || 0),
+      borderColor: EMOTION_CONFIG[emotion].color,
+      backgroundColor: `${EMOTION_CONFIG[emotion].color}33`,
+      fill: true,
+      tension: 0.4
+    }))
+  };
+});
+
+// Dados FINAIS para o Gráfico de Linha de Emoções (filtrado) (NOVO)
+const finalEmotionsOverTimeData = computed(() => {
+  if (!selectedEmotion.value) {
+    return emotionsOverTimeData.value; // Mostra tudo
+  }
+  return {
+    ...emotionsOverTimeData.value,
+    datasets: emotionsOverTimeData.value.datasets.filter(
+      ds => ds.label === selectedEmotion.value
+    )
+  };
+});
+
+// 'wordFrequencyData' (Sem alteração)
 const wordFrequencyData = computed(() => {
   const stopwords = new Set(['de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'é', 'com', 'não', 'uma', 'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao', 'ser', 'ter', 'ele', 'ela', 'nós', 'vc', 'vcs', 'tá']);
   const wordCounts = {};
@@ -153,6 +272,8 @@ const wordFrequencyData = computed(() => {
   };
 });
 
+// 'totalEngagementData' (REMOVIDO DOS GRÁFICOS, MAS MANTIDO CASO VOCÊ QUEIRA USAR DEPOIS)
+// (O gráfico foi substituído pela linha do tempo de emoções)
 const totalEngagementData = computed(() => {
   const totals = dataStore.filteredPublications.reduce((acc, post) => {
     acc.views += Number(post.views) || 0;
@@ -169,6 +290,7 @@ const totalEngagementData = computed(() => {
   };
 });
 
+// 'postsOverTimeData' (Sem alteração)
 const postsOverTimeData = computed(() => {
   const countsByDate = {};
   dataStore.filteredPublications.forEach(post => {
@@ -187,6 +309,7 @@ const postsOverTimeData = computed(() => {
   };
 });
 
+// 'topTagsData' (Sem alteração)
 const topTagsData = computed(() => {
   const tagCounts = {};
   dataStore.filteredPublications.flatMap(p => p.tags || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
@@ -198,13 +321,16 @@ const topTagsData = computed(() => {
   };
 });
 
+// 'bubbleChartPosts' (Sem alteração)
 const bubbleChartPosts = computed(() => dataStore.filteredPublications);
 
+// 'engagementCorrelationData' (Sem alteração - adicionei 'link' para o clique)
 const engagementCorrelationData = computed(() => {
   const data = bubbleChartPosts.value.map(post => ({
     x: Number(post.views) || 0,
     y: Number(post.likes) || 0,
-    r: (Number(post.comments_count) || 0) * 0.5 + 5
+    r: (Number(post.comments_count) || 0) * 0.5 + 5,
+    link: post.url // Adiciona o link para o clique
   }));
 
   return {
@@ -212,35 +338,66 @@ const engagementCorrelationData = computed(() => {
   };
 });
 
+// 'handleChartClick' (Atualizado para pegar 'link' do dataPoint)
 const handleChartClick = (event, elements, posts) => {
   if (elements.length === 0) return;
   const dataIndex = elements[0].index;
+  // 'posts' é passado pelo 'bubbleChartOptions'
   const post = posts[dataIndex];
   if (post && post.link) {
-    window.open(post.link, '_blank');
+    window.open(post.link, '_blank', 'noopener,noreferrer');
   }
 };
 
-const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 } }, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { grid: { color: '#eee' }, ticks: { color: '#555' } } } };
+
+// --- 5. Opções dos Gráficos ---
+
+const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 } }, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { beginAtZero: true, grid: { color: '#eee' }, ticks: { color: '#555' } } } };
 const chartOptions = { ...baseChartOptions };
-const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#555', font: { size: 12 }, padding: 20 } } } };
+
+// Opções da Pizza (Doughnut) - Atualizado com Tooltip de Porcentagem
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'bottom', labels: { color: '#555', font: { size: 12 }, padding: 20 } },
+    tooltip: {
+      ...baseChartOptions.plugins.tooltip,
+      callbacks: {
+        label: function (context) {
+          const label = context.label || '';
+          const value = context.parsed;
+          const sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+          const percentage = sum > 0 ? ((value / sum) * 100).toFixed(1) + '%' : '0%';
+          return ` ${label}: ${value} (${percentage})`;
+        }
+      }
+    }
+  }
+};
+
 const horizontalBarOptions = { ...baseChartOptions, indexAxis: 'y', scales: { x: { grid: { color: '#eee' }, ticks: { color: '#555' } }, y: { grid: { display: false }, ticks: { color: '#555' } } } };
 
+// Opções da Bolha (Bubble) - Atualizado com 'onClick'
 const bubbleChartOptions = computed(() => ({
   ...baseChartOptions,
   plugins: { ...baseChartOptions.plugins, legend: { display: true, position: 'top' } },
   scales: { x: { ...baseChartOptions.scales.x, title: { display: true, text: 'Visualizações' } }, y: { ...baseChartOptions.scales.y, title: { display: true, text: 'Curtidas' } } },
   onHover: (event, chartElement) => {
-    const canvas = event.native.target;
-    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
+    const canvas = event.native?.target;
+    if (canvas) {
+      canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
+    }
   },
   onClick: (event, elements) => {
+    // Passa os posts corretos para o handler
     handleChartClick(event, elements, bubbleChartPosts.value);
   }
 }));
 </script>
 
 <style scoped>
+/* Estilos originais */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -479,6 +636,50 @@ const bubbleChartOptions = computed(() => ({
   text-align: center;
 }
 
+/* --- ESTILOS ADICIONADOS --- */
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  /* Substitui o margin-bottom do chart-title */
+  gap: 1rem;
+}
+
+.chart-header .chart-title {
+  margin-bottom: 0;
+  text-align: left;
+  flex-grow: 1;
+}
+
+.btn-reset-chart {
+  background-color: #ecf0f1;
+  color: #7f8c8d;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-reset-chart:hover {
+  background-color: #bdc3c7;
+  color: #fff;
+}
+
+.no-chart-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+
+/* --- Media Queries (Originais) --- */
 @media (min-width: 576px) {
   .reset-btn {
     width: auto;

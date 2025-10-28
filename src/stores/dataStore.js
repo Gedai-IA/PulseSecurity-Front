@@ -67,6 +67,13 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
+  // NOVO: Função para resetar os filtros sem recarregar os dados
+  function resetFilters() {
+    startDate.value = minDate.value // Reseta para o range total
+    endDate.value = maxDate.value // Reseta para o range total
+    selectedTag.value = 'Todas' // Reseta a tag
+  }
+
   const referenceYear = computed(() => {
     const yearCounts = {}
     publications.value.forEach((post) => {
@@ -162,16 +169,13 @@ export const useDataStore = defineStore('data', () => {
     availableFiles,
     selectedFile,
     loadData,
-
+    resetFilters, // <-- EXPOSTO PARA OS COMPONENTES
     startDate,
     endDate,
     selectedTag,
     allTags,
-
     minDate,
     maxDate,
-
     filteredPublications,
-    processedPublications,
   }
 })

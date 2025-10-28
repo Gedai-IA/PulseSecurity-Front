@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-page">
     <header class="header-controls">
-      <h1 class="main-title">Dashboard de Resumo</h1>
+      <h1 class="main-title">Dashboard PulseSecurity</h1>
       <div class="file-selector">
         <label for="json-select">Fonte de Dados:</label>
         <select id="json-select" v-model="dataStore.selectedFile" @change="dataStore.loadData()"
@@ -13,6 +13,7 @@
       </div>
     </header>
 
+    <!-- Barra de Filtros (sem alterações) -->
     <div class="filter-bar">
       <div class="filter-group">
         <label for="start-date">Data Início:</label>
@@ -39,69 +40,88 @@
         </button>
       </div>
     </div>
+
     <main class="dashboard-content">
 
+      <!-- Estados de Feedback -->
       <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
       </div>
-
       <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
       </div>
 
+      <!-- Conteúdo Principal -->
       <div v-if="!dataStore.error && dataStore.filteredPublications.length > 0" class="dashboard-summary">
+
+        <!-- KPIs (Cards de Métricas) - VISUAL APRIMORADO -->
         <div class="kpi-grid">
           <div class="kpi-card">
-            <h3>Total de Publicações</h3>
-            <p>{{ summaryStats.totalPublications }}</p>
             <i class="fas fa-file-alt kpi-icon"></i>
+            <div>
+              <h3 class="kpi-title">Total de Publicações</h3>
+              <p class="kpi-value">{{ summaryStats.totalPublications }}</p>
+            </div>
           </div>
           <div class="kpi-card">
-            <h3>Total de Interações</h3>
-            <p>{{ summaryStats.totalInteractions }}</p>
             <i class="fas fa-handshake kpi-icon"></i>
+            <div>
+              <h3 class="kpi-title">Total de Interações</h3>
+              <p class="kpi-value">{{ summaryStats.totalInteractions }}</p>
+            </div>
           </div>
           <div class="kpi-card">
-            <h3>Total de Comentários</h3>
-            <p>{{ summaryStats.totalComments }}</p>
             <i class="fas fa-comments kpi-icon"></i>
+            <div>
+              <h3 class="kpi-title">Total de Comentários</h3>
+              <p class="kpi-value">{{ summaryStats.totalComments }}</p>
+            </div>
           </div>
           <div class="kpi-card">
-            <h3>Média de Views</h3>
-            <p>{{ summaryStats.avgViews }}</p>
             <i class="fas fa-eye kpi-icon"></i>
+            <div>
+              <h3 class="kpi-title">Média de Views / Post</h3>
+              <p class="kpi-value">{{ summaryStats.avgViews }}</p>
+            </div>
           </div>
           <div class="kpi-card">
-            <h3>Média de Likes</h3>
-            <p>{{ summaryStats.avgLikes }}</p>
             <i class="fas fa-thumbs-up kpi-icon"></i>
+            <div>
+              <h3 class="kpi-title">Média de Likes / Post</h3>
+              <p class="kpi-value">{{ summaryStats.avgLikes }}</p>
+            </div>
           </div>
           <div class="kpi-card">
-            <h3>Média de Compart.</h3>
-            <p>{{ summaryStats.avgShares }}</p>
             <i class="fas fa-share kpi-icon"></i>
+            <div>
+              <h3 class="kpi-title">Média de Compart. / Post</h3>
+              <p class="kpi-value">{{ summaryStats.avgShares }}</p>
+            </div>
           </div>
         </div>
 
+        <!-- Linha de Gráficos Top 5 -->
         <div class="charts-row">
           <div class="chart-card">
             <h2 class="chart-title">Top 5 (Mais Curtidas)</h2>
-            <Bar :data="topLikesData" :options="topLikesOptions" />
+            <Bar :data="topLikesData" :options="topLikesOptions" ref="topLikesChartRef" class="clickable-chart" />
           </div>
           <div class="chart-card">
             <h2 class="chart-title">Top 5 (Mais Comentadas)</h2>
-            <Bar :data="topCommentsData" :options="topCommentsOptions" />
+            <Bar :data="topCommentsData" :options="topCommentsOptions" ref="topCommentsChartRef"
+              class="clickable-chart" />
           </div>
           <div class="chart-card">
             <h2 class="chart-title">Top 5 (Mais Vistas)</h2>
-            <Bar :data="topViewsData" :options="topViewsOptions" />
+            <Bar :data="topViewsData" :options="topViewsOptions" ref="topViewsChartRef" class="clickable-chart" />
           </div>
         </div>
 
       </div>
 
+      <!-- Estado "Sem Dados" -->
       <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
         <p>Nenhum dado encontrado para os filtros selecionados.</p>
       </div>
@@ -110,14 +130,21 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
 import { Bar } from 'vue-chartjs';
+// Importa o helper para pegar o elemento clicado
+import { getElementAtEvent } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from 'chart.js';
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 const dataStore = useDataStore();
+
+// Refs para os gráficos (necessário para o getElementAtEvent)
+const topLikesChartRef = ref(null);
+const topCommentsChartRef = ref(null);
+const topViewsChartRef = ref(null);
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
@@ -126,32 +153,39 @@ onMounted(() => {
 });
 
 const resetAllFilters = () => {
-  dataStore.resetFilters();
+  // Assume que dataStore tem essa função
+  if (typeof dataStore.resetFilters === 'function') {
+    dataStore.resetFilters();
+  } else {
+    // Fallback caso a função não exista no store
+    dataStore.startDate = dataStore.minDate;
+    dataStore.endDate = dataStore.maxDate;
+    dataStore.selectedTag = 'Todas';
+  }
 };
 
+// --- Funções Auxiliares ---
 const safeAvg = (total, count) => {
-  if (count === 0) return 0;
+  if (!count || count === 0) return 0;
   return (total / count);
 };
 
 const formatNumber = (num) => {
-  if (num < 1000) return num.toFixed(0);
-  if (num < 1000000) return (num / 1000).toFixed(1) + 'k';
-  return (num / 1000000).toFixed(1) + 'M';
+  const n = Number(num) || 0; // Garante que é número
+  if (n < 1000) return n.toFixed(0);
+  if (n < 1000000) return (n / 1000).toFixed(1).replace('.0', '') + 'k';
+  return (n / 1000000).toFixed(1).replace('.0', '') + 'M';
 };
 
+// --- Computeds para KPIs ---
 const summaryStats = computed(() => {
   const pubs = dataStore.filteredPublications;
   const count = pubs.length;
 
   if (count === 0) {
     return {
-      totalPublications: 0,
-      totalInteractions: 0,
-      totalComments: 0,
-      avgViews: 0,
-      avgLikes: 0,
-      avgShares: 0,
+      totalPublications: '0', totalInteractions: '0', totalComments: '0',
+      avgViews: '0', avgLikes: '0', avgShares: '0',
     };
   }
 
@@ -161,6 +195,7 @@ const summaryStats = computed(() => {
     acc.comments_count += Number(post.comments_count) || 0;
     acc.shares += Number(post.shares) || 0;
     acc.bookmarks += Number(post.bookmarks) || 0;
+    // Soma comentários + replies para total real
     acc.totalComments += (post.comments || []).reduce((commentCount, c) => {
       return commentCount + 1 + (c.replies || []).length;
     }, 0);
@@ -179,101 +214,137 @@ const summaryStats = computed(() => {
   };
 });
 
+// --- Computeds para Gráficos Top 5 ---
 
+// Função genérica para pegar os Top posts por uma métrica
 const getTopPosts = (metric) => {
-  const pubs = [...dataStore.filteredPublications];
-  pubs.sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0));
-  return pubs.slice(0, 5).reverse();
+  // Cria cópia e ordena
+  return [...dataStore.filteredPublications]
+    .sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0))
+    .slice(0, 5) // Pega os 5 maiores
+    .reverse(); // Inverte para o maior ficar no topo do gráfico
 };
 
+// Função para formatar dados para o gráfico de barras horizontal
 const formatChartData = (posts, metric, color) => {
   return {
-    labels: posts.map(p => `#${p.publicacao_n} (${(p.description || 'Sem descrição').substring(0, 15)}...)`),
+    // LABEL MAIS LIMPO: Apenas o #ID
+    labels: posts.map(p => `#${p.publicacao_n}`),
     datasets: [{
-      label: `Total de ${metric}`,
+      label: `Total`, // Tooltip mostrará "Total: XXX"
       data: posts.map(p => Number(p[metric]) || 0),
       backgroundColor: color,
       borderRadius: 4,
+      // Guarda a descrição completa para o tooltip
+      postDescriptions: posts.map(p => p.description || 'Sem descrição')
     }]
   };
 };
 
+// Computeds específicos para cada gráfico
 const topLikesPosts = computed(() => getTopPosts('likes'));
-const topLikesData = computed(() => formatChartData(topLikesPosts.value, 'likes', '#27ae60'));
+const topLikesData = computed(() => formatChartData(topLikesPosts.value, 'likes', '#27ae60')); // Verde
 
 const topCommentsPosts = computed(() => getTopPosts('comments_count'));
-const topCommentsData = computed(() => formatChartData(topCommentsPosts.value, 'comments_count', '#2980b9'));
+const topCommentsData = computed(() => formatChartData(topCommentsPosts.value, 'comments_count', '#2980b9')); // Azul
 
 const topViewsPosts = computed(() => getTopPosts('views'));
-const topViewsData = computed(() => formatChartData(topViewsPosts.value, 'views', '#f39c12'));
+const topViewsData = computed(() => formatChartData(topViewsPosts.value, 'views', '#f39c12')); // Laranja
 
-const handleChartClick = (event, elements, posts) => {
+// --- Handler de Clique nos Gráficos ---
+
+const handleChartClick = (event, chartRef, posts) => {
+  const chart = chartRef.value?.chart; // Acessa o gráfico pela ref
+  if (!chart) return;
+
+  const elements = getElementAtEvent(chart, event); // Pega o elemento clicado
   if (elements.length === 0) return;
 
-  const dataIndex = elements[0].index;
-  const post = posts[dataIndex];
+  const { index } = elements[0];
+  const post = posts[index]; // Pega o post correspondente pelo índice
 
-  if (post && post.link) {
-    window.open(post.link, '_blank');
+  // CORREÇÃO: Usa 'url' em vez de 'link'
+  if (post && post.url) {
+    window.open(post.url, '_blank', 'noopener,noreferrer');
   } else {
-    console.warn('Link não encontrado para a publicação:', post);
+    console.warn('URL não encontrado para a publicação:', post);
+    // Poderia mostrar uma mensagem para o usuário aqui
   }
 };
 
-const baseBarOptions = {
+// --- Opções dos Gráficos ---
+
+// Opções base para os gráficos de barras horizontais
+const createBarOptions = (postsRef, chartRef) => ({
   responsive: true,
   maintainAspectRatio: false,
-  indexAxis: 'y',
+  indexAxis: 'y', // Barras horizontais
   plugins: {
     legend: { display: false },
-    tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 }
+    tooltip: {
+      backgroundColor: '#333',
+      titleFont: { size: 14 },
+      bodyFont: { size: 12 },
+      padding: 10,
+      cornerRadius: 6,
+      // Personaliza o tooltip para mostrar a descrição
+      callbacks: {
+        title: function (tooltipItems) {
+          const index = tooltipItems[0].dataIndex;
+          const label = tooltipItems[0].chart.data.labels[index];
+          const description = tooltipItems[0].dataset.postDescriptions[index];
+          return `${label}: ${description.substring(0, 50)}...`; // Mostra ID e Descrição no título
+        },
+        label: function (context) {
+          return ` ${context.dataset.label}: ${formatNumber(context.parsed.x)}`; // Mostra "Total: XXXk"
+        }
+      }
+    }
   },
   scales: {
-    x: { grid: { color: '#eee' }, ticks: { color: '#555' } },
+    x: {
+      grid: { color: '#eee' },
+      ticks: {
+        color: '#555',
+        // Formata os números no eixo X
+        callback: function (value) { return formatNumber(value); }
+      }
+    },
     y: { grid: { display: false }, ticks: { color: '#555' } }
   },
+  // Muda o cursor para indicar clicabilidade
   onHover: (event, chartElement) => {
-    const canvas = event.native.target;
-    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
-  }
-};
+    const canvas = event.native?.target;
+    if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
+  },
+  // Define o onClick para chamar o handler genérico
+  onClick: (event) => handleChartClick(event, chartRef, postsRef.value)
+});
 
-const topLikesOptions = computed(() => ({
-  ...baseBarOptions,
-  onClick: (event, elements) => {
-    handleChartClick(event, elements, topLikesPosts.value);
-  }
-}));
-
-const topCommentsOptions = computed(() => ({
-  ...baseBarOptions,
-  onClick: (event, elements) => {
-    handleChartClick(event, elements, topCommentsPosts.value);
-  }
-}));
-
-const topViewsOptions = computed(() => ({
-  ...baseBarOptions,
-  onClick: (event, elements) => {
-    handleChartClick(event, elements, topViewsPosts.value);
-  }
-}));
+// Opções específicas passando a ref e os posts corretos
+const topLikesOptions = computed(() => createBarOptions(topLikesPosts, topLikesChartRef));
+const topCommentsOptions = computed(() => createBarOptions(topCommentsPosts, topCommentsChartRef));
+const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsChartRef));
 
 </script>
 
 <style scoped>
-:root {
+/* ESTILOS REFINADOS */
+.dashboard-page {
+  /* Variáveis CSS */
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
   --text-primary: #2c3e50;
   --text-secondary: #555;
   --border-color: #e0e0e0;
-  --shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-  --border-radius: 12px;
-}
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  /* Sombra mais suave */
+  --border-radius: 10px;
+  /* Bordas levemente mais suaves */
+  --primary-color: #3498db;
 
-.dashboard-page {
-  padding: 1rem;
+  padding: 1.5rem;
+  /* Aumenta padding geral */
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -281,8 +352,10 @@ const topViewsOptions = computed(() => ({
 
 .header-controls {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  /* Permite quebrar linha em telas menores */
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
   gap: 1rem;
 }
@@ -297,13 +370,13 @@ const topViewsOptions = computed(() => ({
 .file-selector {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   background-color: var(--card-bg);
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  width: 100%;
-  justify-content: space-between;
+  /* width: 100%; */
+  /* Removido para permitir ajuste automático */
   box-sizing: border-box;
 }
 
@@ -311,56 +384,62 @@ const topViewsOptions = computed(() => ({
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
+  font-size: 0.9rem;
 }
 
 .file-selector select {
-  padding: .6rem 1rem;
-  border-radius: 8px;
+  padding: .5rem 0.75rem;
+  /* Padding ligeiramente menor */
+  border-radius: 6px;
   border: 1px solid var(--border-color);
   background-color: #fff;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   text-transform: capitalize;
-  flex-grow: 1;
-  width: 100%;
+  min-width: 180px;
+  /* Largura mínima */
 }
 
+/* Barra de Filtros */
 .filter-bar {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
+  /* Espaçamento padrão */
   background-color: #fff;
-  padding: 1rem;
+  padding: 1rem 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  /* Mais espaço abaixo */
 }
 
 .filter-group {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
-  width: 100%;
 }
 
 .filter-group label {
   font-weight: 500;
   color: var(--text-secondary);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .filter-group input[type="date"],
 .filter-group select {
-  width: 100%;
   box-sizing: border-box;
-  padding: 0.6rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
   background-color: #fff;
   color: var(--text-primary);
+  height: 38px;
+  /* Altura padrão */
 }
 
 .filter-group input:disabled,
@@ -370,14 +449,16 @@ const topViewsOptions = computed(() => ({
 }
 
 .reset-group {
-  align-items: flex-end;
+  margin-left: auto;
+  /* Empurra para a direita */
 }
 
 .reset-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0.6rem 1rem;
+  gap: 0.5rem;
+  /* Menor gap */
+  padding: 0.5rem 1rem;
   background-color: #f0f0f0;
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -386,10 +467,14 @@ const topViewsOptions = computed(() => ({
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.2s ease;
-  width: 100%;
-  justify-content: center;
+  height: 38px;
 }
 
+.reset-btn i {
+  font-size: 0.8em;
+}
+
+/* Ícone menor */
 .reset-btn:hover:not(:disabled) {
   background-color: #e0e0e0;
 }
@@ -399,9 +484,10 @@ const topViewsOptions = computed(() => ({
   cursor: not-allowed;
 }
 
+/* Feedback States */
 .dashboard-content {
   position: relative;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 .feedback-state {
@@ -450,15 +536,15 @@ const topViewsOptions = computed(() => ({
 
 .no-data-state {
   color: var(--text-secondary);
-  font-size: 1.2rem;
-  min-height: 400px;
+  font-size: 1.1rem;
+  min-height: 200px;
 }
 
 .spinner {
-  width: 50px;
-  height: 50px;
-  border: 5px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #3498db;
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-left-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -470,9 +556,11 @@ const topViewsOptions = computed(() => ({
   }
 }
 
+/* Grid de KPIs - VISUAL MELHORADO */
 .kpi-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  /* Responsivo */
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -482,45 +570,55 @@ const topViewsOptions = computed(() => ({
   padding: 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  /* Usa Flexbox */
+  align-items: center;
+  /* Alinha verticalmente */
+  gap: 1rem;
+  /* Espaço entre ícone e texto */
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .kpi-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-}
-
-.kpi-card h3 {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-}
-
-.kpi-card p {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-  line-height: 1;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .kpi-icon {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  font-size: 2rem;
-  color: #f0f3f5;
-  transition: transform 0.3s ease;
+  font-size: 1.8rem;
+  /* Tamanho do ícone */
+  color: var(--primary-color);
+  opacity: 0.7;
+  flex-shrink: 0;
+  /* Não encolhe */
 }
 
-.kpi-card:hover .kpi-icon {
-  transform: scale(1.1) rotate(-5deg);
+.kpi-card div {
+  /* Container para título e valor */
+  text-align: left;
 }
 
+.kpi-title {
+  /* Renomeado de h3 para .kpi-title */
+  font-size: 0.85rem;
+  font-weight: 500;
+  /* Mais leve */
+  color: var(--text-secondary);
+  margin: 0 0 0.25rem 0;
+  /* Menos espaço abaixo */
+}
+
+.kpi-value {
+  /* Renomeado de p para .kpi-value */
+  font-size: 1.6rem;
+  /* Ligeiramente menor */
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* Linha de Gráficos */
 .charts-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -532,95 +630,58 @@ const topViewsOptions = computed(() => ({
   padding: 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  height: 350px;
+  height: 400px;
+  /* Altura padrão reduzida */
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.2s ease;
 }
 
 .chart-card:hover {
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .chart-title {
-  font-size: 1.1rem;
+  font-size: 1.0rem;
+  /* Título menor */
   font-weight: 600;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+  /* Menos espaço */
   color: var(--text-primary);
   text-align: center;
+  margin-top: 0;
 }
 
-@media (min-width: 576px) {
-  .kpi-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .reset-btn {
-    width: auto;
-  }
+.clickable-chart {
+  cursor: pointer;
 }
 
+/* Indica que o gráfico é clicável */
+
+/* Media Queries */
 @media (min-width: 768px) {
   .dashboard-page {
     padding: 2rem;
   }
 
-  .header-controls {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
   .main-title {
-    font-size: 2.25rem;
-  }
-
-  .file-selector {
-    width: auto;
-  }
-
-  .file-selector select {
-    width: auto;
-    min-width: 200px;
-  }
-
-  .filter-bar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    padding: 1rem 1.5rem;
-  }
-
-  .filter-group {
-    flex-direction: row;
-    align-items: center;
-    width: auto;
-  }
-
-  .filter-group input[type="date"],
-  .filter-group select {
-    width: auto;
-  }
-
-  .reset-group {
-    align-self: flex-end;
-  }
-
-  .reset-btn {
-    width: auto;
+    font-size: 2rem;
   }
 
   .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 1.5rem;
   }
 
-  .kpi-card p {
-    font-size: 2.25rem;
+  .kpi-title {
+    font-size: 0.9rem;
+  }
+
+  .kpi-value {
+    font-size: 1.8rem;
   }
 
   .kpi-icon {
-    font-size: 2.5rem;
+    font-size: 2rem;
   }
 }
 
@@ -629,12 +690,9 @@ const topViewsOptions = computed(() => ({
     grid-template-columns: 1fr 1fr;
   }
 
+  /* 2 colunas */
   .chart-card {
     height: 420px;
-  }
-
-  .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 }
 
@@ -642,5 +700,7 @@ const topViewsOptions = computed(() => ({
   .charts-row {
     grid-template-columns: 1fr 1fr 1fr;
   }
+
+  /* 3 colunas */
 }
 </style>

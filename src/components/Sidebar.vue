@@ -43,10 +43,6 @@
           <i class="fas fa-list-alt"></i>
           <span>Publicações</span>
         </RouterLink>
-        <RouterLink to="/resumo" class="nav-item" @click="toggleMenu">
-          <i class="fas fa-clipboard-list"></i>
-          <span>Resumo</span>
-        </RouterLink>
       </nav>
 
       <div class="sidebar-footer">
