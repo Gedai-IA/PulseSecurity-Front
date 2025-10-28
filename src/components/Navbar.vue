@@ -17,13 +17,13 @@ import { RouterLink } from 'vue-router';
 <style scoped>
 .navbar {
   width: 100%;
-  padding: 20px 50px;
   border-bottom: 1px solid #e0e0e0;
   background-color: #fff;
   box-sizing: border-box;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 15px 20px;
 }
 
 .logo-link {
@@ -48,5 +48,11 @@ import { RouterLink } from 'vue-router';
 
 .login-button:hover {
   background-color: #e0e0e0;
+}
+
+@media (min-width: 768px) {
+  .navbar {
+    padding: 20px 50px;
+  }
 }
 </style>

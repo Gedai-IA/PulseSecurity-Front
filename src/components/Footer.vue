@@ -13,12 +13,13 @@
   width: 100%;
   padding: 20px;
   display: flex;
+  box-sizing: border-box;
+  background-color: #fff;
+
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background-color: #fff;
-  box-sizing: border-box;
 }
 
 .footer p {
@@ -28,6 +29,13 @@
 }
 
 .logo-gedai {
-  height: 25px;
+  height: 40px;
+}
+
+@media (min-width: 768px) {
+  .footer {
+    flex-direction: row;
+    justify-content: space-between;
+  }
 }
 </style>

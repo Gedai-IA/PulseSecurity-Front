@@ -1,7 +1,6 @@
-import { ref, computed, watch } from 'vue' // Importe o 'watch'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-// Função centralizada para tratar datas
 function safeParseDate(dateString, referenceYear = null) {
   try {
     if (!dateString || !dateString.includes('-')) return null
@@ -38,20 +37,17 @@ export const useDataStore = defineStore('data', () => {
   ])
   const selectedFile = ref(availableFiles.value[0])
 
-  // --- FILTROS ---
-  const startDate = ref(null) // Formato 'YYYY-MM-DD'
-  const endDate = ref(null) // Formato 'YYYY-MM-DD'
+  const startDate = ref(null)
+  const endDate = ref(null)
   const selectedTag = ref('Todas')
 
-  // --- LIMITES DO CALENDÁRIO (NOVO) ---
-  const minDate = ref(null) // Formato 'YYYY-MM-DD'
-  const maxDate = ref(null) // Formato 'YYYY-MM-DD'
+  const minDate = ref(null)
+  const maxDate = ref(null)
 
   async function loadData() {
     if (!selectedFile.value) return
     loading.value = true
     error.value = null
-    // Reseta filtros
     startDate.value = null
     endDate.value = null
     minDate.value = null
@@ -137,28 +133,21 @@ export const useDataStore = defineStore('data', () => {
     return data
   })
 
-  // --- LÓGICA AUTOMÁTICA DE DATA (NOVO) ---
-  // Observa os dados processados. Quando mudam (ex: ao carregar novo arquivo),
-  // calcula o min/max e define os filtros de data para esse intervalo.
   watch(processedPublications, (newPubs) => {
     if (newPubs.length > 0) {
       const dates = newPubs.map((p) => p.parsedDate.getTime())
       const minTime = Math.min(...dates)
       const maxTime = Math.max(...dates)
 
-      // Converte para 'YYYY-MM-DD'
       const newMinDate = new Date(minTime).toISOString().split('T')[0]
       const newMaxDate = new Date(maxTime).toISOString().split('T')[0]
 
-      // Define os limites do calendário
       minDate.value = newMinDate
       maxDate.value = newMaxDate
 
-      // Define os valores do filtro para o intervalo total
       startDate.value = newMinDate
       endDate.value = newMaxDate
     } else {
-      // Reseta tudo se não houver dados
       minDate.value = null
       maxDate.value = null
       startDate.value = null
@@ -174,17 +163,14 @@ export const useDataStore = defineStore('data', () => {
     selectedFile,
     loadData,
 
-    // Filtros
     startDate,
     endDate,
     selectedTag,
     allTags,
 
-    // Limites do calendário
-    minDate, // NOVO
-    maxDate, // NOVO
+    minDate,
+    maxDate,
 
-    // Dados
     filteredPublications,
     processedPublications,
   }

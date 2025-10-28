@@ -14,6 +14,7 @@
 <script setup>
 import { RouterView } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
+import Footer from '@/components/Sidebar.vue'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 
 </script>

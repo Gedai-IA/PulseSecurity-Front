@@ -115,22 +115,19 @@ onMounted(() => {
   }
 });
 
-// Função auxiliar para calcular média segura
 const safeAvg = (total, count) => {
   if (count === 0) return 0;
   return (total / count);
 };
 
-// Formata números grandes (1000 -> 1k, 1500 -> 1.5k)
 const formatNumber = (num) => {
   if (num < 1000) return num.toFixed(0);
   if (num < 1000000) return (num / 1000).toFixed(1) + 'k';
   return (num / 1000000).toFixed(1) + 'M';
 };
 
-// Calcula todos os KPIs de resumo
 const summaryStats = computed(() => {
-  const pubs = dataStore.filteredPublications; // Usa dados filtrados
+  const pubs = dataStore.filteredPublications;
   const count = pubs.length;
 
   if (count === 0) {
@@ -150,14 +147,12 @@ const summaryStats = computed(() => {
     acc.comments_count += Number(post.comments_count) || 0;
     acc.shares += Number(post.shares) || 0;
     acc.bookmarks += Number(post.bookmarks) || 0;
-    // Conta comentários + replies
     acc.totalComments += (post.comments || []).reduce((commentCount, c) => {
       return commentCount + 1 + (c.replies || []).length;
     }, 0);
     return acc;
   }, { views: 0, likes: 0, comments_count: 0, shares: 0, bookmarks: 0, totalComments: 0 });
 
-  // Soma de todas as interações visíveis
   const totalInteractions = totals.likes + totals.comments_count + totals.shares + totals.bookmarks;
 
   return {
@@ -170,12 +165,9 @@ const summaryStats = computed(() => {
   };
 });
 
-// Prepara dados para os gráficos de Top 5
 const getTopPostsData = (metric, color) => {
-  const pubs = [...dataStore.filteredPublications]; // Clona para não mutar o original
-  // Ordena do maior para o menor
+  const pubs = [...dataStore.filteredPublications];
   pubs.sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0));
-  // Pega os top 5 e inverte (para gráfico de barras horizontal)
   const top5 = pubs.slice(0, 5).reverse();
 
   return {
@@ -192,11 +184,11 @@ const getTopPostsData = (metric, color) => {
 const topLikesData = computed(() => getTopPostsData('likes', '#27ae60'));
 const topCommentsData = computed(() => getTopPostsData('comments_count', '#2980b9'));
 
-// Opções do gráfico de barras
+
 const horizontalBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  indexAxis: 'y', // <-- Torna o gráfico horizontal
+  indexAxis: 'y',
   plugins: {
     legend: { display: false },
     tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 }
@@ -210,7 +202,6 @@ const horizontalBarOptions = {
 </script>
 
 <style scoped>
-/* Estilos base (copiados de outras páginas para consistência) */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -221,8 +212,9 @@ const horizontalBarOptions = {
   --border-radius: 12px;
 }
 
+
 .dashboard-page {
-  padding: 2rem;
+  padding: 1rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -230,15 +222,14 @@ const horizontalBarOptions = {
 
 .header-controls {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
   gap: 1rem;
 }
 
 .main-title {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -252,11 +243,15 @@ const horizontalBarOptions = {
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
+  width: 100%;
+  justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .file-selector label {
   font-weight: 500;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .file-selector select {
@@ -268,23 +263,27 @@ const horizontalBarOptions = {
   font-weight: 500;
   cursor: pointer;
   text-transform: capitalize;
+  flex-grow: 1;
+  width: 100%;
 }
 
 .filter-bar {
   display: flex;
-  gap: 1.5rem;
+  flex-direction: column;
+  gap: 1rem;
   background-color: #fff;
-  padding: 1rem 1.5rem;
+  padding: 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .filter-group label {
@@ -295,7 +294,9 @@ const horizontalBarOptions = {
 
 .filter-group input[type="date"],
 .filter-group select {
-  padding: 0.4rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
@@ -317,6 +318,7 @@ const horizontalBarOptions = {
   min-height: 50vh;
   color: var(--text-secondary);
   font-size: 1.2rem;
+  text-align: center;
 }
 
 .feedback-state.error p {
@@ -329,9 +331,11 @@ const horizontalBarOptions = {
   border-radius: 8px;
   margin-top: 1rem;
   font-size: 0.8rem;
-  max-width: 80%;
+  width: 100%;
+  max-width: 90vw;
   overflow-x: auto;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .spinner {
@@ -350,18 +354,16 @@ const horizontalBarOptions = {
   }
 }
 
-/* NOVOS ESTILOS PARA O DASHBOARD */
-
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: 1fr;
+  gap: 1rem;
   margin-bottom: 2rem;
 }
 
 .kpi-card {
   background: var(--card-bg);
-  padding: 1.5rem;
+  padding: 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   position: relative;
@@ -375,7 +377,7 @@ const horizontalBarOptions = {
 }
 
 .kpi-card h3 {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin-top: 0;
@@ -383,7 +385,7 @@ const horizontalBarOptions = {
 }
 
 .kpi-card p {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -392,9 +394,9 @@ const horizontalBarOptions = {
 
 .kpi-icon {
   position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  font-size: 2.5rem;
+  top: 1rem;
+  right: 1rem;
+  font-size: 2rem;
   color: #f0f3f5;
   transition: transform 0.3s ease;
 }
@@ -405,7 +407,7 @@ const horizontalBarOptions = {
 
 .charts-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1.5rem;
 }
 
@@ -414,7 +416,7 @@ const horizontalBarOptions = {
   padding: 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  height: 420px;
+  height: 350px;
   display: flex;
   flex-direction: column;
 }
@@ -427,23 +429,79 @@ const horizontalBarOptions = {
   text-align: center;
 }
 
-@media (max-width: 992px) {
-  .charts-row {
-    grid-template-columns: 1fr;
+@media (min-width: 576px) {
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 768px) {
+  .dashboard-page {
+    padding: 2rem;
+  }
+
+  .header-controls {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .main-title {
+    font-size: 2.25rem;
+  }
+
+  .file-selector {
+    width: auto;
+  }
+
+  .file-selector select {
+    width: auto;
+    min-width: 200px;
+  }
+
+  .filter-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+  }
+
+  .filter-group {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+  }
+
+  .filter-group input[type="date"],
+  .filter-group select {
+    width: auto;
   }
 
   .kpi-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  .kpi-grid {
-    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
   }
 
   .kpi-card p {
-    font-size: 1.75rem;
+    font-size: 2.25rem;
+  }
+
+  .kpi-icon {
+    font-size: 2.5rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .charts-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chart-card {
+    height: 420px;
   }
 }
 </style>
