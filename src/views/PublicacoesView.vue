@@ -32,26 +32,32 @@
           </option>
         </select>
       </div>
-    </div>
-
-    <div class="local-search-bar">
-      <i class="fas fa-search search-icon"></i>
-      <input type="search" v-model="searchTerm" placeholder="Pesquisar por descrição..." class="search-input">
-      <span class="results-count">{{ searchedPublications.length }} resultado(s)</span>
+      <div class="filter-group reset-group">
+        <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading">
+          <i class="fas fa-undo"></i>
+          <span>Limpar</span>
+        </button>
+      </div>
     </div>
 
     <main class="dashboard-content">
-      <div v-if="dataStore.loading" class="feedback-state">
+      <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
       </div>
 
-      <div v-else-if="dataStore.error" class="feedback-state error">
+      <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-else-if="searchedPublications.length > 0" class="pub-list">
+      <div class="local-search-bar">
+        <i class="fas fa-search search-icon"></i>
+        <input type="search" v-model="searchTerm" placeholder="Pesquisar por descrição ou #ID..." class="search-input">
+        <span class="results-count">{{ searchedPublications.length }} resultado(s)</span>
+      </div>
+
+      <div v-if="searchedPublications.length > 0" class="pub-list">
         <div v-for="pub in searchedPublications" :key="pub.publicacao_n" class="pub-card">
           <div class="pub-header">
             <span class="pub-id">#{{ pub.publicacao_n }}</span>
@@ -68,7 +74,7 @@
         </div>
       </div>
 
-      <div v-else class="feedback-state">
+      <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
         <p>Nenhuma publicação encontrada para os filtros selecionados.</p>
       </div>
     </main>
@@ -80,8 +86,8 @@
           <button @click="closeModal" class="btn-close">&times;</button>
         </div>
         <div class="modal-body">
-          <p><strong>Link:</strong> <a :href="selectedPublication.url" target="_blank" rel="noopener noreferrer">{{
-            selectedPublication.url }}</a></p>
+          <p><strong>Link:</strong> <a :href="selectedPublication.link" target="_blank" rel="noopener noreferrer">{{
+            selectedPublication.link }}</a></p>
           <p><strong>Descrição:</strong> {{ selectedPublication.description || 'N/A' }}</p>
           <p><strong>Música:</strong> {{ selectedPublication.musicTitle || 'N/A' }}</p>
 
@@ -134,7 +140,11 @@ onMounted(() => {
   }
 });
 
-// Filtra as publicações (já filtradas pela store) com base na pesquisa local
+const resetAllFilters = () => {
+  dataStore.resetFilters();
+  searchTerm.value = '';
+};
+
 const searchedPublications = computed(() => {
   if (!searchTerm.value) {
     return dataStore.filteredPublications;
@@ -142,19 +152,19 @@ const searchedPublications = computed(() => {
   const lowerSearch = searchTerm.value.toLowerCase();
   return dataStore.filteredPublications.filter(pub =>
     (pub.description || '').toLowerCase().includes(lowerSearch) ||
-    `#${pub.publicacao_n}` === lowerSearch
+    `#${pub.publicacao_n}`.includes(lowerSearch)
   );
 });
 
-// Funções do Modal
 const openModal = (pub) => {
   selectedPublication.value = pub;
+  document.body.style.overflow = 'hidden';
 };
 const closeModal = () => {
   selectedPublication.value = null;
+  document.body.style.overflow = '';
 };
 
-// Formata números grandes (1000 -> 1k, 1500 -> 1.5k)
 const formatNumber = (numStr) => {
   const num = Number(numStr) || 0;
   if (num < 1000) return num.toFixed(0);
@@ -164,7 +174,6 @@ const formatNumber = (numStr) => {
 </script>
 
 <style scoped>
-/* Estilos Padrão (copiados) */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -176,7 +185,7 @@ const formatNumber = (numStr) => {
 }
 
 .dashboard-page {
-  padding: 2rem;
+  padding: 1rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -184,15 +193,14 @@ const formatNumber = (numStr) => {
 
 .header-controls {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
   gap: 1rem;
 }
 
 .main-title {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -206,11 +214,15 @@ const formatNumber = (numStr) => {
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
+  width: 100%;
+  justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .file-selector label {
   font-weight: 500;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .file-selector select {
@@ -222,23 +234,27 @@ const formatNumber = (numStr) => {
   font-weight: 500;
   cursor: pointer;
   text-transform: capitalize;
+  flex-grow: 1;
+  width: 100%;
 }
 
 .filter-bar {
   display: flex;
-  gap: 1.5rem;
+  flex-direction: column;
+  gap: 1rem;
   background-color: #fff;
-  padding: 1rem 1.5rem;
+  padding: 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .filter-group label {
@@ -249,7 +265,9 @@ const formatNumber = (numStr) => {
 
 .filter-group input[type="date"],
 .filter-group select {
-  padding: 0.4rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
@@ -263,18 +281,70 @@ const formatNumber = (numStr) => {
   cursor: not-allowed;
 }
 
+.reset-group {
+  align-items: flex-end;
+}
+
+.reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 1rem;
+  background-color: #f0f0f0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  justify-content: center;
+}
+
+.reset-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dashboard-content {
+  position: relative;
+  min-height: 400px;
+}
+
 .feedback-state {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: 50vh;
-  color: var(--text-secondary);
-  font-size: 1.2rem;
+  text-align: center;
+  padding: 2rem;
 }
 
-.feedback-state.error p {
+.loading-overlay,
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background-color: rgba(248, 249, 250, 0.85);
+  backdrop-filter: blur(2px);
+  border-radius: var(--border-radius);
+}
+
+.error-overlay {
+  background-color: rgba(255, 235, 235, 0.9);
+}
+
+.error-overlay p {
   color: #c0392b;
+  font-weight: 500;
 }
 
 .feedback-state pre {
@@ -283,9 +353,17 @@ const formatNumber = (numStr) => {
   border-radius: 8px;
   margin-top: 1rem;
   font-size: 0.8rem;
-  max-width: 80%;
+  width: 100%;
+  max-width: 90vw;
   overflow-x: auto;
   text-align: left;
+  box-sizing: border-box;
+}
+
+.no-data-state {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  min-height: 400px;
 }
 
 .spinner {
@@ -304,10 +382,11 @@ const formatNumber = (numStr) => {
   }
 }
 
-/* Estilos da Barra de Pesquisa Local */
 .local-search-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
   background-color: #fff;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
@@ -316,17 +395,22 @@ const formatNumber = (numStr) => {
 }
 
 .search-icon {
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  margin-right: 1rem;
+  display: none;
 }
 
 .search-input {
-  flex-grow: 1;
-  border: none;
-  outline: none;
-  font-size: 1.1rem;
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0.6rem 0.6rem;
+  font-size: 1rem;
   color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #3498db;
 }
 
 .search-input::placeholder {
@@ -337,12 +421,12 @@ const formatNumber = (numStr) => {
   font-size: 0.9rem;
   color: var(--text-secondary);
   white-space: nowrap;
+  align-self: flex-end;
 }
 
-/* Estilos da Lista de Publicações */
 .pub-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1.5rem;
 }
 
@@ -422,7 +506,6 @@ const formatNumber = (numStr) => {
   background-color: #2980b9;
 }
 
-/* Estilos do Modal */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -460,6 +543,7 @@ const formatNumber = (numStr) => {
 .modal-header h2 {
   margin: 0;
   color: var(--text-primary);
+  font-size: 1.25rem;
 }
 
 .btn-close {
@@ -473,7 +557,7 @@ const formatNumber = (numStr) => {
 }
 
 .modal-body {
-  padding: 2rem;
+  padding: 1rem 2rem;
   overflow-y: auto;
   line-height: 1.6;
 }
@@ -507,7 +591,7 @@ const formatNumber = (numStr) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .modal-tags {
@@ -527,7 +611,7 @@ const formatNumber = (numStr) => {
 }
 
 .comment-list {
-  max-height: 300px;
+  max-height: 250px;
   overflow-y: auto;
   border-top: 1px solid var(--border-color);
   margin-top: 1rem;
@@ -553,7 +637,7 @@ const formatNumber = (numStr) => {
 }
 
 .comment-replies {
-  margin-left: 2rem;
+  margin-left: 1.5rem;
   border-left: 3px solid #f0f0f0;
   padding-left: 1rem;
   margin-top: 0.5rem;
@@ -561,5 +645,98 @@ const formatNumber = (numStr) => {
 
 .reply-item {
   margin-top: 0.5rem;
+}
+
+@media (min-width: 576px) {
+  .reset-btn {
+    width: auto;
+  }
+
+  .local-search-bar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .search-icon {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-right: 1rem;
+  }
+
+  .search-input {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    font-size: 1.1rem;
+    padding: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  .dashboard-page {
+    padding: 2rem;
+  }
+
+  .header-controls {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .main-title {
+    font-size: 2.25rem;
+  }
+
+  .file-selector {
+    width: auto;
+  }
+
+  .file-selector select {
+    width: auto;
+    min-width: 200px;
+  }
+
+  .filter-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+  }
+
+  .filter-group {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+  }
+
+  .filter-group input[type="date"],
+  .filter-group select {
+    width: auto;
+  }
+
+  .reset-group {
+    align-self: flex-end;
+  }
+
+  .reset-btn {
+    width: auto;
+  }
+
+  .pub-list {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+
+  .modal-body {
+    padding: 2rem;
+  }
+
+  .modal-stats span {
+    font-size: 0.95rem;
+  }
+
+  .comment-replies {
+    margin-left: 2rem;
+  }
 }
 </style>

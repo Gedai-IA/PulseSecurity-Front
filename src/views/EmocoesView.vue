@@ -32,14 +32,20 @@
           </option>
         </select>
       </div>
+      <div class="filter-group reset-group">
+        <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading">
+          <i class="fas fa-undo"></i>
+          <span>Limpar</span>
+        </button>
+      </div>
     </div>
     <main class="dashboard-content">
-      <div v-if="dataStore.loading" class="feedback-state">
+      <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
       </div>
 
-      <div v-else-if="dataStore.error" class="feedback-state error">
+      <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
       </div>
@@ -59,7 +65,7 @@
         </div>
       </div>
 
-      <div v-else class="feedback-state">
+      <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
         <p>Nenhum dado de emoção encontrado para os filtros selecionados.</p>
       </div>
     </main>
@@ -76,7 +82,6 @@ ChartJS.register(Title, Tooltip, Legend, ArcElement, PointElement, LineElement, 
 
 const dataStore = useDataStore();
 
-// A lógica de classificação de emoções permanece local
 const EMOTION_CONFIG = {
   Alegria: { color: '#2ecc71', keywords: ['gostei', 'legal', 'tmj', 'parabéns', 'kkkkk', 'unidos', 'sempre', 'dominamos', 'vai corinthians', '🦅', '👊🏼'] },
   Raiva: { color: '#e74c3c', keywords: ['correram', 'vergonha', 'ridículo', 'lixo', 'pior', 'odeio', 'tomaram'] },
@@ -97,21 +102,19 @@ const getEmotionFromText = (text) => {
   return 'Neutro';
 };
 
-// ATUALIZADO: Usa 'filteredPublications' e 'parsedDate'
 const processedData = computed(() => {
   return dataStore.filteredPublications.flatMap(post => {
     const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
-    const date = post.parsedDate; // Usa a data já processada
+    const date = post.parsedDate;
     if (!date) return [];
 
     return allPostComments.map(comment => ({
       date: date.toISOString().split('T')[0],
       emotion: getEmotionFromText(comment.text || ''),
     }));
-  }).filter(Boolean); // Filtra qualquer entrada inválida
+  }).filter(Boolean);
 });
 
-// GRÁFICO 1: Distribuição de Emoções (REAL)
 const emotionDistributionData = computed(() => {
   const counts = {};
   allEmotions.forEach(e => counts[e] = 0);
@@ -131,7 +134,6 @@ const emotionDistributionData = computed(() => {
   };
 });
 
-// GRÁFICO 2: Contagem de Emoções ao Longo do Tempo (REAL)
 const emotionOverTimeData = computed(() => {
   const dataByDate = {};
 
@@ -154,7 +156,7 @@ const emotionOverTimeData = computed(() => {
       label: emotion,
       data: sortedDates.map(date => dataByDate[date][emotion]),
       borderColor: EMOTION_CONFIG[emotion].color,
-      backgroundColor: `${EMOTION_CONFIG[emotion].color}33`, // Cor com transparência
+      backgroundColor: `${EMOTION_CONFIG[emotion].color}33`,
       fill: true,
       tension: 0.4
     }))
@@ -168,14 +170,16 @@ onMounted(() => {
   }
 });
 
-// Opções dos gráficos
+const resetAllFilters = () => {
+  dataStore.resetFilters();
+};
+
 const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' }, tooltip: { backgroundColor: '#2c3e50', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6, } } };
 const lineChartOptions = { ...baseChartOptions, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { grid: { color: '#ecf0f1' }, ticks: { color: '#555' } } } };
 const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } };
 </script>
 
 <style scoped>
-/* Use os mesmos estilos de OpinioesView.vue */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -187,7 +191,7 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
 }
 
 .dashboard-page {
-  padding: 2rem;
+  padding: 1rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -195,16 +199,14 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
 
 .header-controls {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
-  /* Ajustado */
   gap: 1rem;
 }
 
 .main-title {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -218,11 +220,15 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
+  width: 100%;
+  justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .file-selector label {
   font-weight: 500;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .file-selector select {
@@ -233,35 +239,28 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.2s ease;
   text-transform: capitalize;
+  flex-grow: 1;
+  width: 100%;
 }
 
-.file-selector select:hover {
-  border-color: #3498db;
-}
-
-.file-selector select:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-/* NOVOS ESTILOS PARA FILTRO */
 .filter-bar {
   display: flex;
-  gap: 1.5rem;
+  flex-direction: column;
+  gap: 1rem;
   background-color: #fff;
-  padding: 1rem 1.5rem;
+  padding: 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .filter-group label {
@@ -272,7 +271,9 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
 
 .filter-group input[type="date"],
 .filter-group select {
-  padding: 0.4rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
@@ -286,49 +287,39 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
   cursor: not-allowed;
 }
 
-/* FIM DOS NOVOS ESTILOS */
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  /* 2 colunas */
-  gap: 1.5rem;
+.reset-group {
+  align-items: flex-end;
 }
 
-.chart-card {
-  background-color: var(--card-bg);
-  padding: 1.5rem;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  height: 420px;
+.reset-btn {
   display: flex;
-  flex-direction: column;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.chart-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-}
-
-.full-width-card {
-  grid-column: 1 / -1;
-  /* Ocupa a linha inteira */
-}
-
-.chart-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 1.5rem;
-  color: var(--text-primary);
-  text-align: center;
-}
-
-.chart-container {
-  position: relative;
-  flex: 1;
-  min-height: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 1rem;
+  background-color: #f0f0f0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
   width: 100%;
+  justify-content: center;
+}
+
+.reset-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dashboard-content {
+  position: relative;
+  min-height: 400px;
 }
 
 .feedback-state {
@@ -336,13 +327,30 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: 50vh;
-  color: var(--text-secondary);
-  font-size: 1.2rem;
+  text-align: center;
+  padding: 2rem;
 }
 
-.feedback-state.error p {
+.loading-overlay,
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background-color: rgba(248, 249, 250, 0.85);
+  backdrop-filter: blur(2px);
+  border-radius: var(--border-radius);
+}
+
+.error-overlay {
+  background-color: rgba(255, 235, 235, 0.9);
+}
+
+.error-overlay p {
   color: #c0392b;
+  font-weight: 500;
 }
 
 .feedback-state pre {
@@ -351,9 +359,17 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
   border-radius: 8px;
   margin-top: 1rem;
   font-size: 0.8rem;
-  max-width: 80%;
+  width: 100%;
+  max-width: 90vw;
   overflow-x: auto;
   text-align: left;
+  box-sizing: border-box;
+}
+
+.no-data-state {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  min-height: 400px;
 }
 
 .spinner {
@@ -372,9 +388,111 @@ const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins:
   }
 }
 
-@media (max-width: 992px) {
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+.chart-card {
+  background-color: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  height: 350px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chart-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.chart-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.chart-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+@media (min-width: 576px) {
+  .reset-btn {
+    width: auto;
+  }
+}
+
+@media (min-width: 768px) {
+  .dashboard-page {
+    padding: 2rem;
+  }
+
+  .header-controls {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .main-title {
+    font-size: 2.25rem;
+  }
+
+  .file-selector {
+    width: auto;
+  }
+
+  .file-selector select {
+    width: auto;
+    min-width: 200px;
+  }
+
+  .filter-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+  }
+
+  .filter-group {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+  }
+
+  .filter-group input[type="date"],
+  .filter-group select {
+    width: auto;
+  }
+
+  .reset-group {
+    align-self: flex-end;
+  }
+
+  .reset-btn {
+    width: auto;
+  }
+
+  .chart-card {
+    height: 420px;
+  }
+}
+
+@media (min-width: 992px) {
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .full-width-card {
+    grid-column: 1 / -1;
   }
 }
 </style>

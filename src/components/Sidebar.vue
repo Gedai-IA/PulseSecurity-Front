@@ -1,6 +1,6 @@
 <template>
   <div>
-    <button @click="toggleMenu" class="mobile-toggle-btn">
+    <button v-if="!isMobileMenuOpen" @click="toggleMenu" class="mobile-toggle-btn" aria-label="Abrir menu">
       <i class="fas fa-bars"></i>
     </button>
 
@@ -10,10 +10,10 @@
     <aside class="sidebar" :class="{ 'is-open': isMobileMenuOpen }">
 
       <div class="sidebar-header-mobile">
-        <RouterLink to="/" class="sidebar-logo-link">
+        <RouterLink to="/" class="sidebar-logo-link" @click="toggleMenu">
           <img src="../img/pulseSecurity.png" alt="PulseSecurity Logo" class="logo" />
         </RouterLink>
-        <button @click="toggleMenu" class="mobile-close-btn">
+        <button @click="toggleMenu" class="mobile-close-btn" aria-label="Fechar menu">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -23,27 +23,28 @@
       </RouterLink>
 
       <nav class="sidebar-nav">
-        <RouterLink to="/opinioes" class="nav-item">
+        <RouterLink to="/opinioes" class="nav-item" @click="toggleMenu">
           <i class="fas fa-comment-dots"></i>
           <span>Opiniões</span>
         </RouterLink>
-        <RouterLink to="/emocoes" class="nav-item">
+        <RouterLink to="/emocoes" class="nav-item" @click="toggleMenu">
           <i class="fas fa-face-smile"></i>
           <span>Emoções</span>
         </RouterLink>
-        <RouterLink to="/topicos" class="nav-item">
+        <RouterLink to="/topicos" class="nav-item" @click="toggleMenu">
           <i class="fas fa-layer-group"></i>
           <span>Tópicos</span>
         </RouterLink>
-        <RouterLink to="/tendencias" class="nav-item">
+        <RouterLink to="/tendencias" class="nav-item" @click="toggleMenu">
           <i class="fas fa-chart-line"></i>
           <span>Tendências</span>
         </RouterLink>
-        <RouterLink to="/publicacoes" class="nav-item">
+        <RouterLink to="/publicacoes" class="nav-item" @click="toggleMenu">
           <i class="fas fa-list-alt"></i>
           <span>Publicações</span>
         </RouterLink>
-        <RouterLink to="/resumo" class="nav-item"> <i class="fas fa-clipboard-list"></i>
+        <RouterLink to="/resumo" class="nav-item" @click="toggleMenu">
+          <i class="fas fa-clipboard-list"></i>
           <span>Resumo</span>
         </RouterLink>
       </nav>
@@ -86,17 +87,15 @@ const toggleMenu = () => {
   left: 0;
   height: 100vh;
   z-index: 1000;
-
   transform: translateX(-100%);
   transition: transform 0.3s ease-in-out;
-
   overflow-y: auto;
-
   width: 250px;
   background-color: #fff;
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .sidebar.is-open {
@@ -114,6 +113,7 @@ const toggleMenu = () => {
   padding: 8px 10px;
   font-size: 1.2rem;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .sidebar-overlay {
@@ -144,10 +144,12 @@ const toggleMenu = () => {
   font-size: 1.5rem;
   color: #333;
   cursor: pointer;
+  padding: 0;
 }
 
 .logo {
   height: 40px;
+  display: block;
 }
 
 .sidebar-nav {
@@ -164,15 +166,27 @@ const toggleMenu = () => {
   font-size: 1.1rem;
   font-weight: 500;
   gap: 15px;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .nav-item:hover {
-  background-color: #f0f0e0;
+  background-color: #f5f5f5;
+}
+
+.nav-item.router-link-active {
+  background-color: #f0f0f0;
+  color: #2c3e50;
+  font-weight: 600;
 }
 
 .nav-item i {
   font-size: 1.3rem;
   color: #555;
+  transition: color 0.2s ease;
+}
+
+.nav-item.router-link-active i {
+  color: #2c3e50;
 }
 
 .sidebar-footer {

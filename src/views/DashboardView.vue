@@ -32,20 +32,26 @@
           </option>
         </select>
       </div>
+      <div class="filter-group reset-group">
+        <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading">
+          <i class="fas fa-undo"></i>
+          <span>Limpar</span>
+        </button>
+      </div>
     </div>
     <main class="dashboard-content">
-      <div v-if="dataStore.loading" class="feedback-state">
+
+      <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
       </div>
 
-      <div v-else-if="dataStore.error" class="feedback-state error">
+      <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-else-if="dataStore.filteredPublications.length > 0" class="dashboard-summary">
-
+      <div v-if="!dataStore.error && dataStore.filteredPublications.length > 0" class="dashboard-summary">
         <div class="kpi-grid">
           <div class="kpi-card">
             <h3>Total de Publicações</h3>
@@ -81,18 +87,22 @@
 
         <div class="charts-row">
           <div class="chart-card">
-            <h2 class="chart-title">Top 5 Publicações (Mais Curtidas)</h2>
-            <Bar :data="topLikesData" :options="horizontalBarOptions" />
+            <h2 class="chart-title">Top 5 (Mais Curtidas)</h2>
+            <Bar :data="topLikesData" :options="topLikesOptions" />
           </div>
           <div class="chart-card">
-            <h2 class="chart-title">Top 5 Publicações (Mais Comentadas)</h2>
-            <Bar :data="topCommentsData" :options="horizontalBarOptions" />
+            <h2 class="chart-title">Top 5 (Mais Comentadas)</h2>
+            <Bar :data="topCommentsData" :options="topCommentsOptions" />
+          </div>
+          <div class="chart-card">
+            <h2 class="chart-title">Top 5 (Mais Vistas)</h2>
+            <Bar :data="topViewsData" :options="topViewsOptions" />
           </div>
         </div>
 
       </div>
 
-      <div v-else class="feedback-state">
+      <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
         <p>Nenhum dado encontrado para os filtros selecionados.</p>
       </div>
     </main>
@@ -114,6 +124,10 @@ onMounted(() => {
     dataStore.loadData();
   }
 });
+
+const resetAllFilters = () => {
+  dataStore.resetFilters();
+};
 
 const safeAvg = (total, count) => {
   if (count === 0) return 0;
@@ -165,27 +179,48 @@ const summaryStats = computed(() => {
   };
 });
 
-const getTopPostsData = (metric, color) => {
+
+const getTopPosts = (metric) => {
   const pubs = [...dataStore.filteredPublications];
   pubs.sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0));
-  const top5 = pubs.slice(0, 5).reverse();
+  return pubs.slice(0, 5).reverse();
+};
 
+const formatChartData = (posts, metric, color) => {
   return {
-    labels: top5.map(p => `#${p.publicacao_n} (${(p.description || 'Sem descrição').substring(0, 15)}...)`),
+    labels: posts.map(p => `#${p.publicacao_n} (${(p.description || 'Sem descrição').substring(0, 15)}...)`),
     datasets: [{
       label: `Total de ${metric}`,
-      data: top5.map(p => Number(p[metric]) || 0),
+      data: posts.map(p => Number(p[metric]) || 0),
       backgroundColor: color,
       borderRadius: 4,
     }]
   };
 };
 
-const topLikesData = computed(() => getTopPostsData('likes', '#27ae60'));
-const topCommentsData = computed(() => getTopPostsData('comments_count', '#2980b9'));
+const topLikesPosts = computed(() => getTopPosts('likes'));
+const topLikesData = computed(() => formatChartData(topLikesPosts.value, 'likes', '#27ae60'));
 
+const topCommentsPosts = computed(() => getTopPosts('comments_count'));
+const topCommentsData = computed(() => formatChartData(topCommentsPosts.value, 'comments_count', '#2980b9'));
 
-const horizontalBarOptions = {
+const topViewsPosts = computed(() => getTopPosts('views'));
+const topViewsData = computed(() => formatChartData(topViewsPosts.value, 'views', '#f39c12'));
+
+const handleChartClick = (event, elements, posts) => {
+  if (elements.length === 0) return;
+
+  const dataIndex = elements[0].index;
+  const post = posts[dataIndex];
+
+  if (post && post.link) {
+    window.open(post.link, '_blank');
+  } else {
+    console.warn('Link não encontrado para a publicação:', post);
+  }
+};
+
+const baseBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
   indexAxis: 'y',
@@ -196,8 +231,33 @@ const horizontalBarOptions = {
   scales: {
     x: { grid: { color: '#eee' }, ticks: { color: '#555' } },
     y: { grid: { display: false }, ticks: { color: '#555' } }
+  },
+  onHover: (event, chartElement) => {
+    const canvas = event.native.target;
+    canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
   }
 };
+
+const topLikesOptions = computed(() => ({
+  ...baseBarOptions,
+  onClick: (event, elements) => {
+    handleChartClick(event, elements, topLikesPosts.value);
+  }
+}));
+
+const topCommentsOptions = computed(() => ({
+  ...baseBarOptions,
+  onClick: (event, elements) => {
+    handleChartClick(event, elements, topCommentsPosts.value);
+  }
+}));
+
+const topViewsOptions = computed(() => ({
+  ...baseBarOptions,
+  onClick: (event, elements) => {
+    handleChartClick(event, elements, topViewsPosts.value);
+  }
+}));
 
 </script>
 
@@ -211,7 +271,6 @@ const horizontalBarOptions = {
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
   --border-radius: 12px;
 }
-
 
 .dashboard-page {
   padding: 1rem;
@@ -310,19 +369,70 @@ const horizontalBarOptions = {
   cursor: not-allowed;
 }
 
+.reset-group {
+  align-items: flex-end;
+}
+
+.reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 1rem;
+  background-color: #f0f0f0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  justify-content: center;
+}
+
+.reset-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dashboard-content {
+  position: relative;
+  min-height: 400px;
+}
+
 .feedback-state {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: 50vh;
-  color: var(--text-secondary);
-  font-size: 1.2rem;
   text-align: center;
+  padding: 2rem;
 }
 
-.feedback-state.error p {
+.loading-overlay,
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background-color: rgba(248, 249, 250, 0.85);
+  backdrop-filter: blur(2px);
+  border-radius: var(--border-radius);
+}
+
+.error-overlay {
+  background-color: rgba(255, 235, 235, 0.9);
+}
+
+.error-overlay p {
   color: #c0392b;
+  font-weight: 500;
 }
 
 .feedback-state pre {
@@ -336,6 +446,12 @@ const horizontalBarOptions = {
   overflow-x: auto;
   text-align: left;
   box-sizing: border-box;
+}
+
+.no-data-state {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  min-height: 400px;
 }
 
 .spinner {
@@ -419,6 +535,11 @@ const horizontalBarOptions = {
   height: 350px;
   display: flex;
   flex-direction: column;
+  transition: box-shadow 0.2s ease;
+}
+
+.chart-card:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
 }
 
 .chart-title {
@@ -432,6 +553,10 @@ const horizontalBarOptions = {
 @media (min-width: 576px) {
   .kpi-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .reset-btn {
+    width: auto;
   }
 }
 
@@ -477,6 +602,14 @@ const horizontalBarOptions = {
     width: auto;
   }
 
+  .reset-group {
+    align-self: flex-end;
+  }
+
+  .reset-btn {
+    width: auto;
+  }
+
   .kpi-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 1.5rem;
@@ -492,16 +625,22 @@ const horizontalBarOptions = {
 }
 
 @media (min-width: 992px) {
-  .kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-
   .charts-row {
     grid-template-columns: 1fr 1fr;
   }
 
   .chart-card {
     height: 420px;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .charts-row {
+    grid-template-columns: 1fr 1fr 1fr;
   }
 }
 </style>

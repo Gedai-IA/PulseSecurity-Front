@@ -40,13 +40,19 @@
           <option value="30">Últimos 30 dias</option>
         </select>
       </div>
+      <div class="filter-group reset-group">
+        <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading">
+          <i class="fas fa-undo"></i>
+          <span>Limpar</span>
+        </button>
+      </div>
     </div>
     <main class="dashboard-content">
-      <div v-if="dataStore.loading" class="feedback-state">
+      <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
       </div>
-      <div v-else-if="dataStore.error" class="feedback-state error">
+      <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>😕 Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
       </div>
@@ -72,16 +78,16 @@
               </span>
             </div>
           </div>
-          <div class="axis" :style="{ paddingLeft: '200px' }"> <span v-for="tick in axisTicks" :key="tick">{{ tick
+          <div class="axis"> <span v-for="tick in axisTicks" :key="tick">{{ tick
               }}</span>
           </div>
           <div class="legend">
-            <span class="legend-item"><span class="color-box current"></span> Volume no Período Atual</span>
-            <span class="legend-item"><span class="color-box previous"></span> Volume no Período Anterior</span>
+            <span class="legend-item"><span class="color-box current"></span> Vol. Período Atual</span>
+            <span class="legend-item"><span class="color-box previous"></span> Vol. Período Anterior</span>
           </div>
         </div>
       </div>
-      <div v-else class="feedback-state">
+      <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
         <p>Não há dados suficientes nos períodos de tempo selecionados para análise.</p>
       </div>
     </main>
@@ -115,15 +121,13 @@ const getTopicFromText = (text) => {
   return 'Geral';
 };
 
-// ATUALIZADO: Usa 'filteredPublications' e 'parsedDate'
 const processedDataByDate = computed(() => {
-  // USA OS DADOS JÁ FILTRADOS PELOS FILTROS GLOBAIS
   const publications = dataStore.filteredPublications;
   if (!publications || publications.length === 0) return [];
 
   const topicMentions = [];
   publications.forEach(post => {
-    const date = post.parsedDate; // Usa data processada
+    const date = post.parsedDate;
     if (!date) return;
 
     const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
@@ -141,9 +145,6 @@ const trendData = computed(() => {
   const allMentions = processedDataByDate.value;
   if (allMentions.length === 0) return [];
 
-  // A "última data" é a data mais recente NOS DADOS FILTRADOS
-  // Se o usuário filtrou por uma data fim, ela será o limite.
-  // Se não, será a última data dos dados.
   const latestDateInData = new Date(
     Math.max(...allMentions.map(mention => mention.date.getTime()))
   );
@@ -161,7 +162,6 @@ const trendData = computed(() => {
   });
 
   allMentions.forEach(({ date, topic }) => {
-    // Normaliza datas para ignorar horas/minutos
     const mentionDate = new Date(date.setHours(0, 0, 0, 0));
 
     if (mentionDate >= currentPeriodStart && mentionDate <= currentPeriodEnd) {
@@ -217,6 +217,11 @@ const formatChange = (change) => {
   return '0%';
 };
 
+const resetAllFilters = () => {
+  dataStore.resetFilters();
+  timeMarginInDays.value = 7;
+};
+
 onMounted(() => {
   if (dataStore.publications.length === 0) {
     dataStore.loadData();
@@ -225,7 +230,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Use os mesmos estilos de OpinioesView.vue, mas com as adições */
 :root {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
@@ -237,7 +241,7 @@ onMounted(() => {
 }
 
 .dashboard-page {
-  padding: 2rem;
+  padding: 1rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -245,39 +249,40 @@ onMounted(() => {
 
 .header-controls {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
   gap: 1rem;
 }
 
 .main-title {
-  font-size: 2.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
 
 .controls-group {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
+  width: 100%;
 }
 
 .file-selector {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background-color: #fff;
+  background-color: var(--card-bg);
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
+  width: 100%;
+  justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .file-selector label {
   font-weight: 500;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .file-selector select {
@@ -289,24 +294,27 @@ onMounted(() => {
   font-weight: 500;
   cursor: pointer;
   text-transform: capitalize;
+  flex-grow: 1;
+  width: 100%;
 }
 
-/* NOVOS ESTILOS PARA FILTRO */
 .filter-bar {
   display: flex;
-  gap: 1.5rem;
+  flex-direction: column;
+  gap: 1rem;
   background-color: #fff;
-  padding: 1rem 1.5rem;
+  padding: 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .filter-group label {
@@ -317,7 +325,9 @@ onMounted(() => {
 
 .filter-group input[type="date"],
 .filter-group select {
-  padding: 0.4rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
@@ -331,39 +341,139 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* FIM DOS NOVOS ESTILOS */
+.reset-group {
+  align-items: flex-end;
+}
+
+.reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 1rem;
+  background-color: #f0f0f0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  justify-content: center;
+}
+
+.reset-btn:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dashboard-content {
+  position: relative;
+  min-height: 400px;
+}
+
+.feedback-state {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading-overlay,
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background-color: rgba(248, 249, 250, 0.85);
+  backdrop-filter: blur(2px);
+  border-radius: var(--border-radius);
+}
+
+.error-overlay {
+  background-color: rgba(255, 235, 235, 0.9);
+}
+
+.error-overlay p {
+  color: #c0392b;
+  font-weight: 500;
+}
+
+.feedback-state pre {
+  background-color: #fdd;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  width: 100%;
+  max-width: 90vw;
+  overflow-x: auto;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.no-data-state {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  min-height: 400px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(0, 0, 0, 0.1);
+  border-left-color: #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .chart-card {
   background-color: #fff;
-  padding: 2rem;
+  padding: 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
 }
 
 .chart-title {
   text-align: center;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .trend-chart-container {
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 0 1rem;
+  gap: 24px;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 .trend-item {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 1fr;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .topic-label {
-  text-align: right;
+  text-align: left;
   font-weight: 500;
   font-size: 1rem;
   color: var(--text-secondary);
@@ -422,7 +532,6 @@ onMounted(() => {
   font-size: 1rem;
   font-weight: 700;
   white-space: nowrap;
-  width: 80px;
   text-align: left;
 }
 
@@ -446,12 +555,14 @@ onMounted(() => {
   padding-top: 8px;
   font-size: 0.8rem;
   color: #6c757d;
+  padding-left: 0;
 }
 
 .legend {
   display: flex;
-  justify-content: flex-end;
-  gap: 1.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
   margin-top: 1.5rem;
 }
 
@@ -476,48 +587,96 @@ onMounted(() => {
   background-color: #7f8c8d;
 }
 
-.feedback-state {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 60vh;
-  color: var(--text-secondary);
-  font-size: 1.2rem;
-  text-align: center;
+@media (min-width: 576px) {
+  .reset-btn {
+    width: auto;
+  }
+
+  .legend {
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 1.5rem;
+  }
 }
 
-.feedback-state pre {
-  background-color: #fdd;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-  font-size: 0.8rem;
-  max-width: 80%;
-  overflow-x: auto;
-  text-align: left;
-}
+@media (min-width: 768px) {
+  .dashboard-page {
+    padding: 2rem;
+  }
 
-@media (max-width: 768px) {
+  .header-controls {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
 
-  .header-controls,
+  .main-title {
+    font-size: 2.25rem;
+  }
+
   .controls-group {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    width: auto;
+  }
+
+  .file-selector {
+    width: auto;
+  }
+
+  .file-selector select {
+    width: auto;
+    min-width: 200px;
+  }
+
+  .filter-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+  }
+
+  .filter-group {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+  }
+
+  .filter-group input[type="date"],
+  .filter-group select {
+    width: auto;
+  }
+
+  .reset-group {
+    align-self: flex-end;
+  }
+
+  .reset-btn {
+    width: auto;
+  }
+
+  .chart-card {
+    padding: 2rem;
+  }
+
+  .chart-title {
+    font-size: 1.5rem;
+    margin-bottom: 3rem;
   }
 
   .trend-item {
-    grid-template-columns: 1fr;
+    grid-template-columns: 200px 1fr;
+    gap: 1rem;
   }
 
   .topic-label {
-    text-align: left;
-    margin-bottom: 0.5rem;
+    text-align: right;
+  }
+
+  .change-indicator {
+    width: 80px;
   }
 
   .axis {
-    padding-left: 0 !important;
+    padding-left: calc(200px + 1rem);
   }
 }
 </style>
