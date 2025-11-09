@@ -4,7 +4,7 @@ import DashboardView from '../views/DashboardView.vue'
 import LoginView from '../views/LoginView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import OpinioesView from '../views/OpinioesView.vue'
-import EmocoesView from '../views/EmocoesView.vue'
+import SentimentoView from '../views/SentimentoView.vue'
 import TopicosView from '../views/TopicosView.vue'
 import TendenciasView from '../views/TendenciasView.vue'
 import PublicacoesView from '../views/PublicacoesView.vue'
@@ -20,7 +20,7 @@ const router = createRouter({
         { path: '', name: 'dashboard', component: DashboardView },
         { path: 'profile', name: 'profile', component: ProfileView },
         { path: 'opinioes', name: 'opinioes', component: OpinioesView },
-        { path: 'emocoes', name: 'emocoes', component: EmocoesView },
+        { path: 'sentimentos', name: 'sentimentos', component: SentimentoView },
         { path: 'topicos', name: 'topicos', component: TopicosView },
         { path: 'tendencias', name: 'tendencias', component: TendenciasView },
         { path: 'publicacoes', name: 'publicacoes', component: PublicacoesView },

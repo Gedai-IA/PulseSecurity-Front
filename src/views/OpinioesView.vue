@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-page">
     <header class="header-controls">
-      <h1 class="main-title">Relatório de Análise de Opiniões</h1>
+      <h1 class="main-title">Análise de Opinião e Tendências</h1>
       <div class="file-selector">
         <label for="json-select">Fonte de Dados:</label>
         <select id="json-select" v-model="dataStore.selectedFile" @change="dataStore.loadData()"
@@ -16,11 +16,13 @@
     <div class="filter-bar">
       <div class="filter-group">
         <label for="start-date">Data Início:</label>
-        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading">
+        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading"
+          :min="dataStore.minDate" :max="dataStore.maxDate">
       </div>
       <div class="filter-group">
         <label for="end-date">Data Fim:</label>
-        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading">
+        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading"
+          :min="dataStore.minDate" :max="dataStore.maxDate">
       </div>
       <div class="filter-group">
         <label for="tag-select">Filtrar por Tag:</label>
@@ -37,60 +39,71 @@
         </button>
       </div>
     </div>
+
+    <div v-if="selectedSentiment" class="active-filter-bar">
+      <span>Filtrando por Sentimento:</span>
+      <span class="filter-tag" :style="{ backgroundColor: getSentimentColor(selectedSentiment) }">
+        {{ selectedSentiment }}
+      </span>
+      <button @click="resetSentimentFilter" class="btn-clear-filter">
+        &times; Limpar
+      </button>
+    </div>
+
     <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
       </div>
-
       <div v-else-if="dataStore.error" class="feedback-state error-overlay">
         <p>Ocorreu um erro ao carregar os dados.</p>
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-else-if="dataStore.filteredPublications.length > 0" class="dashboard-grid">
-        <div class="chart-card full-width-card">
-          <h2 class="chart-title">Publicações ao Longo do Tempo</h2>
-          <Line v-if="postsOverTimeData.labels.length" :data="postsOverTimeData" :options="chartOptions" />
+      <div v-else-if="processedData.length > 0" class="opinion-grid">
+
+        <!-- LINHA 1: O Quê e Quando -->
+        <div class="chart-card chart-card-pie">
+          <h2 class="chart-title">Análise de Sentimento (Clique para filtrar)</h2>
+          <Doughnut :data="sentimentDoughnutData" :options="doughnutOptions" @click="handleDoughnutClick"
+            ref="doughnutChartRef" />
         </div>
 
-        <div class="chart-card">
-          <div class="chart-header">
-            <h2 class="chart-title">Análise de Emoções</h2>
-            <button v-if="selectedEmotion" @click="resetEmotionFilter" class="btn-reset-chart">
-              Limpar
-            </button>
+        <div class="chart-card chart-card-line">
+          <h2 class="chart-title">
+            {{ selectedSentiment ? `Evolução de Sentimento ${selectedSentiment}` : 'Evolução de Sentimentos' }}
+          </h2>
+          <Line :data="sentimentOverTimeData" :options="lineOptions" />
+        </div>
+
+        <!-- LINHA 2: Porquê, Como e Sinais -->
+        <div class="chart-card chart-card-emotions">
+          <h2 class="chart-title">
+            {{ selectedSentiment ? `Distribuição de Emoções (${selectedSentiment})` : 'Emoções (Geral)' }}
+          </h2>
+          <Bar :data="emotionDistributionData" :options="barOptions" />
+        </div>
+
+        <div class="chart-card chart-card-cloud">
+          <h2 class="chart-title">
+            {{ selectedSentiment ? `Nuvem de Palavras (${selectedSentiment})` : 'Nuvem de Palavras (Geral)' }}
+          </h2>
+          <div class="word-cloud-container">
+            <span v-if="wordCloudData.length === 0" class="placeholder-state">Nenhuma palavra.</span>
+            <span v-for="word in wordCloudData" :key="word.text" class="word-cloud-item"
+              :style="{ fontSize: word.size + 'px', opacity: word.opacity, fontWeight: word.weight, color: word.color }">
+              {{ word.text }}
+            </span>
           </div>
-          <Doughnut v-if="sentimentData.labels.length" :data="sentimentData" :options="doughnutOptions"
-            @click="handleDoughnutClick" ref="doughnutChartRef" />
         </div>
 
-        <div class="chart-card">
-          <div class="chart-header">
-            <h2 class="chart-title">
-              {{ selectedEmotion ? `Emoção "${selectedEmotion}" ao Longo do Tempo` : 'Emoções ao Longo do Tempo' }}
-            </h2>
-          </div>
-          <Line v-if="finalEmotionsOverTimeData.labels.length" :data="finalEmotionsOverTimeData"
-            :options="chartOptions" />
-          <div v-else class="no-chart-data">Sem dados de emoção para exibir.</div>
+        <div class="chart-card chart-card-music">
+          <h2 class="chart-title">
+            {{ selectedSentiment ? `Top Músicas (${selectedSentiment})` : 'Top 5 Músicas Utilizadas' }}
+          </h2>
+          <Bar :data="topMusicData" :options="horizontalBarOptions" />
         </div>
 
-        <div class="chart-card">
-          <h2 class="chart-title">Correlação: Views vs. Likes</h2>
-          <Bubble v-if="engagementCorrelationData.datasets[0]?.data.length" :data="engagementCorrelationData"
-            :options="bubbleChartOptions" />
-        </div>
-
-        <div class="chart-card medium-width-card">
-          <h2 class="chart-title">Top 10 Palavras Mais Frequentes</h2>
-          <Bar v-if="wordFrequencyData.labels.length" :data="wordFrequencyData" :options="horizontalBarOptions" />
-        </div>
-
-        <div class="chart-card medium-width-card">
-          <h2 class="chart-title">Top 10 Tags Mais Utilizadas</h2>
-          <Bar v-if="topTagsData.labels.length" :data="topTagsData" :options="horizontalBarOptions" />
-        </div>
       </div>
 
       <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
@@ -101,265 +114,297 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { useDataStore } from '@/stores/dataStore';
-import { Bar, Line, Bubble, Doughnut } from 'vue-chartjs';
-import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BubbleController } from 'chart.js';
-import { getElementAtEvent } from 'vue-chartjs';
-import { EMOTION_CONFIG, allEmotions, getEmotion } from '@/utils/emotionClassifier.js';
+// (O SCRIPT É O MESMO DA VERSÃO ANTERIOR - SEM ALTERAÇÕES)
+import { computed, onMounted, ref } from 'vue'
+import { useDataStore } from '@/stores/dataStore'
+import { Bar, Line, Doughnut } from 'vue-chartjs'
+import { getElementAtEvent } from 'vue-chartjs'
+import { Chart as ChartJS, Title, Tooltip as ChartJSTooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Filler } from 'chart.js'
 
-ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BubbleController);
+import { getSentiment, SENTIMENT_CONFIG, allSentiments } from '@/utils/sentimentClassifier.js'
+import { getEmotion, EMOTION_CONFIG, allEmotions } from '@/utils/emotionClassifier.js'
+import { STOPWORDS_PT } from '@/utils/stopwords.js'
+import { formatNumber } from '@/utils/formatters.js'
 
-const dataStore = useDataStore();
+ChartJS.register(Title, ChartJSTooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Filler)
 
-const doughnutChartRef = ref(null);
-const selectedEmotion = ref(null);
+const dataStore = useDataStore()
+const doughnutChartRef = ref(null)
+const selectedSentiment = ref(null)
 
-const allCommentsWithEmotion = computed(() => {
-  return dataStore.filteredPublications.flatMap(post => {
-    const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
-    const date = post.parsedDate;
-    if (!date) return [];
-
-    return allPostComments.map(comment => ({
-      postDate: date,
-      emotion: getEmotion(comment.text || ''),
-    }));
-  }).filter(item => item.emotion !== 'Neutro');
-});
-
+const getSentimentColor = (sentiment) => {
+  return SENTIMENT_CONFIG[sentiment]?.color || '#95a5a6'
+}
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
-    dataStore.loadData();
+    dataStore.loadData()
   }
-});
+})
 
 const resetAllFilters = () => {
-  dataStore.resetFilters();
-  resetEmotionFilter();
-};
+  dataStore.resetFilters()
+  resetSentimentFilter()
+}
 
-const resetEmotionFilter = () => {
-  selectedEmotion.value = null;
-};
+const resetSentimentFilter = () => {
+  selectedSentiment.value = null
+}
 
 const handleDoughnutClick = (event) => {
-  const chart = doughnutChartRef.value?.chart;
-  if (!chart) return;
-  const elements = getElementAtEvent(chart, event);
+  const chart = doughnutChartRef.value?.chart
+  if (!chart) return
+  const elements = getElementAtEvent(chart, event)
   if (elements.length > 0) {
-    const { index } = elements[0];
-    const newEmotion = sentimentData.value.labels[index];
-    selectedEmotion.value = selectedEmotion.value === newEmotion ? null : newEmotion;
+    const { index } = elements[0]
+    const newSentiment = chart.data.labels[index]
+    selectedSentiment.value = selectedSentiment.value === newSentiment ? null : newSentiment
   }
-};
+}
 
-const sentimentData = computed(() => {
-  const counts = { Alegria: 0, Raiva: 0, Frustração: 0, Ansiedade: 0 };
-  allCommentsWithEmotion.value.forEach(item => {
-    if (counts[item.emotion] !== undefined) {
-      counts[item.emotion]++;
-    }
-  });
+const processedData = computed(() => {
+  return dataStore.filteredPublications.flatMap(post => {
+    const allComments = (post.comments || []).flatMap(c => [
+      { text: c.text, type: 'comment' },
+      ...(c.replies || []).map(r => ({ text: r.text, type: 'reply' }))
+    ])
+    allComments.push({ text: post.description, type: 'description' })
+
+    return allComments.map(comment => {
+      const text = comment.text || ''
+      const sentiment = getSentiment(text)
+      const emotion = getEmotion(text)
+      return {
+        postRef: post,
+        text: text,
+        date: post.parsedDate,
+        tags: post.tags || [],
+        musicTitle: post.musicTitle || 'N/A',
+        sentiment: sentiment,
+        emotion: emotion,
+      }
+    })
+  }).filter(d => d.date && d.sentiment !== 'Neutro')
+})
+
+const filteredData = computed(() => {
+  if (!selectedSentiment.value) {
+    return processedData.value
+  }
+  return processedData.value.filter(d => d.sentiment === selectedSentiment.value)
+})
+
+const sentimentDoughnutData = computed(() => {
+  const counts = { Positivo: 0, Negativo: 0 }
+  processedData.value.forEach(item => {
+    counts[item.sentiment]++
+  })
   return {
-    labels: allEmotions,
+    labels: allSentiments,
     datasets: [{
-      data: allEmotions.map(e => counts[e]),
-      backgroundColor: allEmotions.map(e => EMOTION_CONFIG[e].color)
+      data: allSentiments.map(s => counts[s]),
+      backgroundColor: allSentiments.map(s => SENTIMENT_CONFIG[s].color)
     }]
-  };
-});
+  }
+})
 
-const emotionsOverTimeData = computed(() => {
-  const dataByDate = {};
-  allCommentsWithEmotion.value.forEach(item => {
-    const dateKey = item.postDate.toISOString().split('T')[0];
+const sentimentOverTimeData = computed(() => {
+  const dataByDate = {}
+  filteredData.value.forEach(item => {
+    const dateKey = item.date.toISOString().split('T')[0]
     if (!dataByDate[dateKey]) {
-      dataByDate[dateKey] = { Alegria: 0, Raiva: 0, Frustração: 0, Ansiedade: 0 };
+      dataByDate[dateKey] = { Positivo: 0, Negativo: 0 }
     }
-    dataByDate[dateKey][item.emotion]++;
-  });
-  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b));
-  return {
-    labels: sortedDates.map(date => new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
-    datasets: allEmotions.map(emotion => ({
-      label: emotion,
-      data: sortedDates.map(date => dataByDate[date][emotion] || 0),
-      borderColor: EMOTION_CONFIG[emotion].color,
-      backgroundColor: `${EMOTION_CONFIG[emotion].color}33`,
-      fill: true,
-      tension: 0.4
-    }))
-  };
-});
+    dataByDate[dateKey][item.sentiment]++
+  })
 
-const finalEmotionsOverTimeData = computed(() => {
-  if (!selectedEmotion.value) {
-    return emotionsOverTimeData.value;
+  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b))
+  const labels = sortedDates.map(d => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }))
+
+  const datasets = allSentiments.map(sentiment => ({
+    label: sentiment,
+    data: sortedDates.map(date => (dataByDate[date]?.[sentiment] || 0)),
+    borderColor: SENTIMENT_CONFIG[sentiment].color,
+    backgroundColor: `${SENTIMENT_CONFIG[sentiment].color}33`,
+    fill: true,
+    tension: 0.4
+  }))
+
+  return {
+    labels: labels,
+    datasets: selectedSentiment.value ? datasets.filter(d => d.label === selectedSentiment.value) : datasets
   }
-  return {
-    ...emotionsOverTimeData.value,
-    datasets: emotionsOverTimeData.value.datasets.filter(
-      ds => ds.label === selectedEmotion.value
-    )
-  };
-});
+})
 
-const wordFrequencyData = computed(() => {
-  const stopwords = new Set(['de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'é', 'com', 'não', 'uma', 'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao', 'ser', 'ter', 'ele', 'ela', 'nós', 'vc', 'vcs', 'tá']);
-  const wordCounts = {};
+const wordCloudData = computed(() => {
+  const wordCounts = {}
+  const allText = filteredData.value.map(p => p.text).join(' ')
 
-  const allText = dataStore.filteredPublications.map(p => {
-    const description = p.description || '';
-    const commentsText = (p.comments || []).flatMap(c => [c.text, ...(c.replies || []).map(r => r.text)]).join(' ');
-    return `${description} ${commentsText}`;
-  }).join(' ');
+  allText.toLowerCase().replace(/[^a-zà-ú\s]/g, '').split(/\s+/).filter(word => {
+    return word.length > 3 && !STOPWORDS_PT.has(word)
+  }).forEach(word => {
+    wordCounts[word] = (wordCounts[word] || 0) + 1
+  })
 
-  allText.toLowerCase().replace(/[^a-zà-ú\s]/g, '').split(/\s+/).filter(word => word.length > 2 && !stopwords.has(word)).forEach(word => { wordCounts[word] = (wordCounts[word] || 0) + 1; });
-  const sortedWords = Object.entries(wordCounts).sort(([, a], [, b]) => b - a).slice(0, 10);
+  const sortedWords = Object.entries(wordCounts).sort(([, a], [, b]) => b - a).slice(0, 40)
+  if (sortedWords.length === 0) return []
 
-  return {
-    labels: sortedWords.map(([word]) => word),
-    datasets: [{ label: 'Ocorrências', data: sortedWords.map(([, count]) => count), backgroundColor: '#d35400' }]
-  };
-});
+  const max = sortedWords[0][1]
+  const min = sortedWords[sortedWords.length - 1][1] || 0
 
-const totalEngagementData = computed(() => {
-  const totals = dataStore.filteredPublications.reduce((acc, post) => {
-    acc.views += Number(post.views) || 0;
-    acc.likes += Number(post.likes) || 0;
-    acc.comments += Number(post.comments_count) || 0;
-    acc.shares += Number(post.shares) || 0;
-    acc.bookmarks += Number(post.bookmarks) || 0;
-    return acc;
-  }, { views: 0, likes: 0, comments: 0, shares: 0, bookmarks: 0 });
+  const color = selectedSentiment.value ? getSentimentColor(selectedSentiment.value) : '#2c3e50'
 
-  return {
-    labels: ['Views', 'Likes', 'Comentários', 'Compart.', 'Salvos'],
-    datasets: [{ label: 'Total de Interações', data: [totals.views, totals.likes, totals.comments, totals.shares, totals.bookmarks], backgroundColor: ['#2980b9', '#27ae60', '#f1c40f', '#c0392b', '#8e44ad'] }],
-  };
-});
-
-const postsOverTimeData = computed(() => {
-  const countsByDate = {};
-  dataStore.filteredPublications.forEach(post => {
-    const date = post.parsedDate;
-    if (date) {
-      const dateKey = date.toISOString().split('T')[0];
-      countsByDate[dateKey] = (countsByDate[dateKey] || 0) + 1;
+  return sortedWords.map(([text, value]) => {
+    const weight = (max - min) > 0 ? (value - min) / (max - min) : 0.5
+    return {
+      text,
+      value,
+      size: 14 + (weight * 28),
+      opacity: 0.6 + (weight * 0.4),
+      weight: 400 + Math.round(weight * 3) * 100,
+      color: color
     }
-  });
+  }).sort(() => Math.random() - 0.5)
+})
 
-  const sortedDates = Object.keys(countsByDate).sort((a, b) => new Date(a) - new Date(b));
+const topMusicData = computed(() => {
+  const musicCounts = {}
+  const postMusicMap = new Map()
+  filteredData.value.forEach(p => {
+    if (p.musicTitle && p.musicTitle !== 'N/A') {
+      postMusicMap.set(p.postRef.publicacao_n, p.musicTitle)
+    }
+  })
 
-  return {
-    labels: sortedDates.map(date => new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })),
-    datasets: [{ label: 'Número de Publicações', data: sortedDates.map(date => countsByDate[date]), borderColor: '#8e44ad', backgroundColor: 'rgba(142, 68, 173, 0.1)', fill: true, tension: 0.3 }]
-  };
-});
+  postMusicMap.forEach(musicTitle => {
+    musicCounts[musicTitle] = (musicCounts[musicTitle] || 0) + 1
+  })
 
-const topTagsData = computed(() => {
-  const tagCounts = {};
-  dataStore.filteredPublications.flatMap(p => p.tags || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
-  const sortedTags = Object.entries(tagCounts).sort(([, a], [, b]) => b - a).slice(0, 10);
-
-  return {
-    labels: sortedTags.map(([tag]) => tag),
-    datasets: [{ label: 'Ocorrências', data: sortedTags.map(([, count]) => count), backgroundColor: '#16a085' }]
-  };
-});
-
-const bubbleChartPosts = computed(() => dataStore.filteredPublications);
-
-const engagementCorrelationData = computed(() => {
-  const data = bubbleChartPosts.value.map(post => ({
-    x: Number(post.views) || 0,
-    y: Number(post.likes) || 0,
-    r: (Number(post.comments_count) || 0) * 0.5 + 5,
-    link: post.url
-  }));
+  const sortedMusic = Object.entries(musicCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .reverse()
 
   return {
-    datasets: [{ label: 'Publicações (Tamanho por Comentários)', data, backgroundColor: 'rgba(192, 57, 43, 0.6)' }]
-  };
-});
-
-const handleChartClick = (event, elements, posts) => {
-  if (elements.length === 0) return;
-  const dataIndex = elements[0].index;
-  const post = posts[dataIndex];
-  if (post && post.link) {
-    window.open(post.link, '_blank', 'noopener,noreferrer');
+    labels: sortedMusic.map(([title]) => title.substring(0, 30) + (title.length > 30 ? '...' : '')),
+    datasets: [{
+      label: 'Nº de Posts',
+      data: sortedMusic.map(([, count]) => count),
+      backgroundColor: selectedSentiment.value ? getSentimentColor(selectedSentiment.value) : '#8e44ad',
+      borderRadius: 4,
+    }]
   }
-};
+})
 
-const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 } }, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { beginAtZero: true, grid: { color: '#eee' }, ticks: { color: '#555' } } } };
-const chartOptions = { ...baseChartOptions };
+const emotionDistributionData = computed(() => {
+  const counts = {}
+  allEmotions.forEach(e => { counts[e] = 0 })
+
+  filteredData.value.forEach(item => {
+    if (item.emotion !== 'Geral' && counts[item.emotion] !== undefined) {
+      counts[item.emotion]++
+    }
+  })
+
+  const labels = allEmotions.filter(e => e !== 'Geral')
+
+  return {
+    labels: labels,
+    datasets: [{
+      label: 'Contagem',
+      data: labels.map(e => counts[e]),
+      backgroundColor: labels.map(e => EMOTION_CONFIG[e].color)
+    }]
+  }
+})
+
+const lineOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'top' } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#555' } },
+    y: { beginAtZero: true, grid: { color: '#ecf0f1' }, ticks: { color: '#555' } }
+  }
+}
 
 const doughnutOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'bottom', labels: { color: '#555', font: { size: 12 }, padding: 20 } },
+    legend: { position: 'bottom' },
     tooltip: {
-      ...baseChartOptions.plugins.tooltip,
       callbacks: {
         label: function (context) {
-          const label = context.label || '';
-          const value = context.parsed;
-          const sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-          const percentage = sum > 0 ? ((value / sum) * 100).toFixed(1) + '%' : '0%';
-          return ` ${label}: ${value} (${percentage})`;
+          const label = context.label || ''
+          const value = context.parsed
+          const sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0)
+          const percentage = sum > 0 ? ((value / sum) * 100).toFixed(1) + '%' : '0%'
+          return ` ${label}: ${formatNumber(value)} (${percentage})`
+        }
+      }
+    }
+  },
+  onHover: (event, chartElement) => {
+    const canvas = event.native?.target
+    if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default'
+  }
+}
+
+const barOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#555' } },
+    y: { beginAtZero: true, grid: { color: '#ecf0f1' }, ticks: { color: '#555' } }
+  }
+}
+
+const horizontalBarOptions = {
+  ...barOptions,
+  indexAxis: 'y',
+  scales: {
+    ...barOptions.scales,
+    x: {
+      ...barOptions.scales.x,
+      ticks: {
+        color: '#555',
+        callback: function (value) {
+          if (Math.floor(value) === value) {
+            return value;
+          }
         }
       }
     }
   }
-};
-
-const horizontalBarOptions = { ...baseChartOptions, indexAxis: 'y', scales: { x: { grid: { color: '#eee' }, ticks: { color: '#555' } }, y: { grid: { display: false }, ticks: { color: '#555' } } } };
-
-const bubbleChartOptions = computed(() => ({
-  ...baseChartOptions,
-  plugins: { ...baseChartOptions.plugins, legend: { display: true, position: 'top' } },
-  scales: { x: { ...baseChartOptions.scales.x, title: { display: true, text: 'Visualizações' } }, y: { ...baseChartOptions.scales.y, title: { display: true, text: 'Curtidas' } } },
-  onHover: (event, chartElement) => {
-    const canvas = event.native?.target;
-    if (canvas) {
-      canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
-    }
-  },
-  onClick: (event, elements) => {
-    handleChartClick(event, elements, bubbleChartPosts.value);
-  }
-}));
+}
 </script>
 
 <style scoped>
-/* Estilos originais */
-:root {
+/* Estilos Base (copiados do seu original) */
+.dashboard-page {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
   --text-primary: #2c3e50;
   --text-secondary: #555;
   --border-color: #e0e0e0;
-  --shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-  --border-radius: 12px;
-}
-
-.dashboard-page {
-  padding: 1rem;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --border-radius: 10px;
+  --primary-color: #3498db;
+  padding: 1.5rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
 }
 
-.header-controls {
+.header-controls,
+.filter-bar {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .main-title {
@@ -372,87 +417,57 @@ const bubbleChartOptions = computed(() => ({
 .file-selector {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   background-color: var(--card-bg);
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  width: 100%;
-  justify-content: space-between;
-  box-sizing: border-box;
-}
-
-.file-selector label {
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.file-selector select {
-  padding: .6rem 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background-color: #fff;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-transform: capitalize;
-  flex-grow: 1;
-  width: 100%;
+  margin-left: auto;
 }
 
 .filter-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
   background-color: #fff;
-  padding: 1rem;
+  padding: 1rem 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  margin-bottom: 1.5rem;
 }
 
 .filter-group {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
-  width: 100%;
 }
 
 .filter-group label {
   font-weight: 500;
   color: var(--text-secondary);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .filter-group input[type="date"],
+.file-selector select,
 .filter-group select {
-  width: 100%;
   box-sizing: border-box;
-  padding: 0.6rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
   background-color: #fff;
   color: var(--text-primary);
-}
-
-.filter-group input:disabled,
-.filter-group select:disabled {
-  background-color: #f8f9fa;
-  cursor: not-allowed;
+  height: 38px;
+  cursor: pointer;
 }
 
 .reset-group {
-  align-items: flex-end;
+  margin-left: auto;
 }
 
 .reset-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0.6rem 1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
   background-color: #f0f0f0;
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -461,31 +476,65 @@ const bubbleChartOptions = computed(() => ({
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.2s ease;
-  width: 100%;
-  justify-content: center;
+  height: 38px;
 }
 
-.reset-btn:hover:not(:disabled) {
+.reset-btn:hover {
   background-color: #e0e0e0;
 }
 
-.reset-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.active-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--card-bg);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
+.filter-tag {
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.btn-clear-filter {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-clear-filter:hover {
+  text-decoration: underline;
+}
+
+/* Estados de Feedback */
 .dashboard-content {
   position: relative;
-  min-height: 400px;
+  min-height: 300px;
 }
 
-.feedback-state {
+.feedback-state,
+.placeholder-state {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
   padding: 2rem;
+  height: 100%;
+  color: var(--text-secondary);
+  opacity: 0.8;
 }
 
 .loading-overlay,
@@ -503,37 +552,19 @@ const bubbleChartOptions = computed(() => ({
 
 .error-overlay {
   background-color: rgba(255, 235, 235, 0.9);
-}
-
-.error-overlay p {
   color: #c0392b;
-  font-weight: 500;
-}
-
-.feedback-state pre {
-  background-color: #fdd;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-  font-size: 0.8rem;
-  width: 100%;
-  max-width: 90vw;
-  overflow-x: auto;
-  text-align: left;
-  box-sizing: border-box;
 }
 
 .no-data-state {
-  color: var(--text-secondary);
-  font-size: 1.2rem;
-  min-height: 400px;
+  font-size: 1.1rem;
+  min-height: 200px;
 }
 
 .spinner {
-  width: 50px;
-  height: 50px;
-  border: 5px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #3498db;
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-left-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -545,7 +576,8 @@ const bubbleChartOptions = computed(() => ({
   }
 }
 
-.dashboard-grid {
+/* NOVO: Layout da Página de Opiniões (Grid 3 Colunas) */
+.opinion-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.5rem;
@@ -556,15 +588,12 @@ const bubbleChartOptions = computed(() => ({
   padding: 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  height: 350px;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.chart-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  height: 400px;
+  /* Altura reduzida para mais densidade */
+  overflow: hidden;
+  /* Garante que o conteúdo não vaze */
 }
 
 .chart-title {
@@ -573,141 +602,70 @@ const bubbleChartOptions = computed(() => ({
   margin-bottom: 1.5rem;
   color: var(--text-primary);
   text-align: center;
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
-/* --- ESTILOS ADICIONADOS --- */
-.chart-header {
+/* Estilos da Nuvem de Palavras */
+.word-cloud-container {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  /* Substitui o margin-bottom do chart-title */
-  gap: 1rem;
-}
-
-.chart-header .chart-title {
-  margin-bottom: 0;
-  text-align: left;
-  flex-grow: 1;
-}
-
-.btn-reset-chart {
-  background-color: #ecf0f1;
-  color: #7f8c8d;
-  border: none;
-  border-radius: 6px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-reset-chart:hover {
-  background-color: #bdc3c7;
-  color: #fff;
-}
-
-.no-chart-data {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem 0.75rem;
   flex-grow: 1;
-  color: var(--text-secondary);
-  font-style: italic;
+  overflow-y: auto;
+  padding: 0.5rem;
+  /* Menor padding para caber mais */
+  min-height: 250px;
 }
 
-
-/* --- Media Queries (Originais) --- */
-@media (min-width: 576px) {
-  .reset-btn {
-    width: auto;
-  }
+.word-cloud-item {
+  display: inline-block;
+  cursor: default;
+  transition: all 0.2s ease;
+  line-height: 1.1;
 }
 
-@media (min-width: 768px) {
-  .dashboard-page {
-    padding: 2rem;
-  }
+.word-cloud-item:hover {
+  transform: scale(1.1);
+}
 
-  .header-controls {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .main-title {
-    font-size: 2.25rem;
-  }
-
-  .file-selector {
-    width: auto;
-  }
-
-  .file-selector select {
-    width: auto;
-    min-width: 200px;
-  }
-
-  .filter-bar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    padding: 1rem 1.5rem;
-  }
-
-  .filter-group {
-    flex-direction: row;
-    align-items: center;
-    width: auto;
-  }
-
-  .filter-group input[type="date"],
-  .filter-group select {
-    width: auto;
-  }
-
-  .reset-group {
-    align-self: flex-end;
-  }
-
-  .reset-btn {
-    width: auto;
-  }
-
-  .dashboard-grid {
+@media (min-width: 992px) {
+  .opinion-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .full-width-card {
+  .chart-card-line {
     grid-column: 1 / -1;
-  }
-
-  .chart-card {
-    height: 420px;
-    grid-column: span 1;
-  }
-
-  .chart-card:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+    /* Linha de evolução ocupa 100% */
   }
 }
 
 @media (min-width: 1200px) {
-  .dashboard-grid {
-    grid-template-columns: repeat(6, 1fr);
+  .opinion-grid {
+    /* Layout profissional de 3 colunas */
+    grid-template-columns: repeat(3, 1fr);
   }
 
-  .full-width-card {
-    grid-column: span 6;
+  .chart-card-pie {
+    grid-column: span 1;
   }
 
-  .chart-card {
+  .chart-card-line {
     grid-column: span 2;
   }
 
-  .medium-width-card {
-    grid-column: span 3;
+  .chart-card-emotions {
+    grid-column: span 1;
+  }
+
+  .chart-card-cloud {
+    grid-column: span 1;
+  }
+
+  .chart-card-music {
+    grid-column: span 1;
   }
 }
 </style>

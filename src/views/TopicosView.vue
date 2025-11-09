@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-page">
     <header class="header-controls">
-      <h1 class="main-title">Relatório de Análise de Tópicos</h1>
+      <h1 class="main-title">Análise Tópico-Sentimento</h1>
       <div class="file-selector">
         <label for="json-select">Fonte de Dados:</label>
         <select id="json-select" v-model="dataStore.selectedFile" @change="dataStore.loadData()"
@@ -16,11 +16,13 @@
     <div class="filter-bar">
       <div class="filter-group">
         <label for="start-date">Data Início:</label>
-        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading">
+        <input type="date" id="start-date" v-model="dataStore.startDate" :disabled="dataStore.loading"
+          :min="dataStore.minDate" :max="dataStore.maxDate">
       </div>
       <div class="filter-group">
         <label for="end-date">Data Fim:</label>
-        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading">
+        <input type="date" id="end-date" v-model="dataStore.endDate" :disabled="dataStore.loading"
+          :min="dataStore.minDate" :max="dataStore.maxDate">
       </div>
       <div class="filter-group">
         <label for="tag-select">Filtrar por Tag:</label>
@@ -37,6 +39,17 @@
         </button>
       </div>
     </div>
+
+    <div v-if="selectedTopic" class="active-filter-bar">
+      <span>Filtrando por Tópico:</span>
+      <span class="filter-tag" :style="{ backgroundColor: getTopicColor(selectedTopic) }">
+        {{ selectedTopic }}
+      </span>
+      <button @click="resetTopicFilter" class="btn-clear-filter">
+        &times; Limpar
+      </button>
+    </div>
+
     <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
@@ -48,30 +61,78 @@
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-else-if="processedData.length > 0" class="dashboard-grid-topicos">
-        <div class="chart-card">
-          <h2 class="chart-title">Evolução da Proporção de Discussões</h2>
-          <Line :data="stackedAreaData" :options="stackedAreaOptions" />
-        </div>
-        <div class="chart-card">
-          <h2 class="chart-title">Distribuição de Emoções por Tópico</h2>
-          <Bar :data="emotionsByTopicData" :options="groupedBarOptions" />
-        </div>
+      <div v-else-if="processedData.length > 0" class="topics-grid">
+
         <div class="chart-card full-width">
-          <div class="card-header">
-            <h2 class="chart-title">Nuvem de Palavras por Tópico</h2>
-            <select v-model="selectedTopicForWordCloud" class="topic-select">
-              <option v-for="topic in allTopics" :key="topic" :value="topic">{{ topic }}</option>
-            </select>
+          <h2 class="chart-title">Distribuição de Sentimento por Tópico (Clique para filtrar)</h2>
+          <Bar :data="sentimentByTopicData" :options="groupedBarOptions" @click="handleBarClick" ref="barChartRef" />
+        </div>
+
+        <div class="chart-card">
+          <h2 class="chart-title">
+            {{ selectedTopic ? `Evolução de "${selectedTopic}"` : 'Evolução do Tópico (Selecione um tópico)' }}
+          </h2>
+          <Line v-if="selectedTopic" :data="topicEvolutionData" :options="lineOptions" />
+          <div v-else class="placeholder-state">
+            <i class="fas fa-chart-line"></i>
+            <p>Clique num tópico no gráfico acima para ver a sua evolução.</p>
           </div>
-          <div class="word-cloud-container">
-            <span v-if="wordCloudData.length === 0">Nenhuma palavra encontrada para este tópico.</span>
-            <span v-for="word in wordCloudData" :key="word.text"
+        </div>
+
+        <!-- NOVO GRÁFICO: DISTRIBUIÇÃO DE EMOÇÕES -->
+        <div class="chart-card">
+          <h2 class="chart-title">
+            {{ selectedTopic ? `Distribuição de Emoções ("${selectedTopic}")` : 'Emoções no Tópico' }}
+          </h2>
+          <Bar v-if="selectedTopic" :data="emotionBreakdownData" :options="barOptions" />
+          <div v-else class="placeholder-state">
+            <i class="fas fa-smile-beam"></i>
+            <p>Clique num tópico para ver a divisão de emoções (Raiva, Alegria, etc).</p>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <h2 class="chart-title">
+            {{ selectedTopic ? `Nuvem de Palavras ("${selectedTopic}")` : 'Nuvem de Palavras' }}
+          </h2>
+          <div v-if="selectedTopic" class="word-cloud-container">
+            <span v-if="wordCloudData.length === 0">Nenhuma palavra encontrada.</span>
+            <span v-for="word in wordCloudData" :key="word.text" class="word-cloud-item"
               :style="{ fontSize: word.size + 'px', color: word.color, opacity: word.opacity, fontWeight: word.weight }">
               {{ word.text }}
             </span>
           </div>
+          <div v-else class="placeholder-state">
+            <i class="fas fa-cloud"></i>
+            <p>Clique num tópico para ver as palavras-chave.</p>
+          </div>
         </div>
+
+        <!-- NOVO COMPONENTE: POSTS RELEVANTES -->
+        <div class="chart-card list-card">
+          <h2 class="chart-title">
+            {{ selectedTopic ? `Posts Relevantes ("${selectedTopic}")` : 'Posts Relevantes' }}
+          </h2>
+          <div v-if="selectedTopic" class="posts-list-container">
+            <ul v-if="topPostsData.length > 0" class="posts-list">
+              <li v-for="item in topPostsData" :key="item.post.publicacao_n">
+                <a :href="item.post.url" target="_blank" rel="noopener noreferrer" class="post-link">
+                  <span class="post-id">#{{ item.post.publicacao_n }}</span>
+                  <p class="post-description">{{ item.post.description.substring(0, 80) }}...</p>
+                  <span class="post-count" :style="{ backgroundColor: getTopicColor(selectedTopic) }">
+                    <i class="fas fa-comments"></i> {{ item.count }} menções
+                  </span>
+                </a>
+              </li>
+            </ul>
+            <span v-else class="no-data-state">Nenhum post encontrado.</span>
+          </div>
+          <div v-else class="placeholder-state">
+            <i class="fas fa-list-ol"></i>
+            <p>Clique num tópico para ver os posts com mais menções.</p>
+          </div>
+        </div>
+
       </div>
 
       <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
@@ -82,150 +143,248 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useDataStore } from '@/stores/dataStore';
-import { Line, Bar } from 'vue-chartjs';
-import { Chart as ChartJS, Title, Tooltip, Legend, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Filler } from 'chart.js';
-import { getTopicFromText, TOPIC_CONFIG } from '@/utils/topicClassifier.js';
-import { getEmotion, EMOTION_CONFIG as BASE_EMOTION_CONFIG, allEmotions as allBaseEmotions } from '@/utils/emotionClassifier.js';
-import { stopwords } from '@/utils/stopwords.js';
+import { ref, onMounted, computed } from 'vue'
+import { useDataStore } from '@/stores/dataStore'
+import { Line, Bar } from 'vue-chartjs'
+import { getElementAtEvent } from 'vue-chartjs'
+import { Chart as ChartJS, Title, Tooltip as ChartJSTooltip, Legend, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Filler } from 'chart.js'
+import { formatNumber } from '@/utils/formatters.js' // Importar formatNumber
+import { getTopicFromText, TOPIC_CONFIG, allTopics } from '@/utils/topicClassifier.js'
+import { getSentiment, SENTIMENT_CONFIG, allSentiments } from '@/utils/sentimentClassifier.js'
+import { getEmotion, EMOTION_CONFIG, allEmotions } from '@/utils/emotionClassifier.js' // NOVO: Importar emoções
+import { STOPWORDS_PT } from '@/utils/stopwords.js'
 
-ChartJS.register(Title, Tooltip, Legend, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Filler);
+ChartJS.register(Title, ChartJSTooltip, Legend, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Filler)
 
-const dataStore = useDataStore();
+const dataStore = useDataStore()
+const barChartRef = ref(null)
+const selectedTopic = ref(null)
 
-const allTopics = ref(Object.keys(TOPIC_CONFIG));
-const selectedTopicForWordCloud = ref(allTopics.value[0]);
-
-const TOPICS_EMOTION_CONFIG = {
-  ...BASE_EMOTION_CONFIG,
-  'Neutro': { color: '#95a5a6' }
-};
-const allEmotions = ref([...allBaseEmotions, 'Neutro']);
+const getTopicColor = (topicName) => {
+  return TOPIC_CONFIG[topicName]?.color || '#95a5a6'
+}
 
 const processedData = computed(() => {
   return dataStore.filteredPublications.flatMap(post => {
-    const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
-    const date = post.parsedDate;
-    if (!date) return [];
+    const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])])
+    allPostComments.push({ text: post.description })
+    const date = post.parsedDate
+    if (!date) return []
 
-    return allPostComments.map(comment => ({
-      date: date.toISOString().split('T')[0],
-      text: `${post.description || ''} ${comment.text || ''}`,
-      topic: getTopicFromText(`${post.description || ''} ${comment.text || ''}`),
-      emotion: getEmotion(comment.text || ''),
-    }));
-  });
-});
+    return allPostComments.map(comment => {
+      const text = `${comment.text || ''}`
+      const fullText = `${post.description || ''} ${text}`
+      return {
+        postRef: post, // NOVO: Guardar referência ao post original
+        date: date.toISOString().split('T')[0],
+        text: text,
+        fullText: fullText,
+        topic: getTopicFromText(fullText),
+        sentiment: getSentiment(text),
+        emotion: getEmotion(text) // NOVO: Classificar emoção
+      }
+    })
+  })
+})
+
+const filteredData = computed(() => {
+  if (!selectedTopic.value) {
+    return processedData.value
+  }
+  return processedData.value.filter(p => p.topic === selectedTopic.value)
+})
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
-    dataStore.loadData();
+    dataStore.loadData()
   }
-});
+})
 
 const resetAllFilters = () => {
-  dataStore.resetFilters();
-  selectedTopicForWordCloud.value = allTopics.value[0];
-};
+  dataStore.resetFilters()
+  resetTopicFilter()
+}
 
-const stackedAreaData = computed(() => {
-  const dataByDate = {};
+const resetTopicFilter = () => {
+  selectedTopic.value = null
+}
+
+const handleBarClick = (event) => {
+  const chart = barChartRef.value?.chart
+  if (!chart) return
+  const elements = getElementAtEvent(chart, event)
+  if (elements.length > 0) {
+    const { index } = elements[0]
+    const topicLabel = chart.data.labels[index]
+    selectedTopic.value = selectedTopic.value === topicLabel ? null : topicLabel
+  }
+}
+
+const sentimentByTopicData = computed(() => {
+  const data = {}
+  allTopics.forEach(t => {
+    data[t] = {}
+    allSentiments.forEach(e => data[t][e] = 0)
+  })
+
   processedData.value.forEach(p => {
-    if (!dataByDate[p.date]) dataByDate[p.date] = {};
-    allTopics.value.forEach(topic => dataByDate[p.date][topic] = dataByDate[p.date][topic] || 0);
-    if (dataByDate[p.date][p.topic] !== undefined) {
-      dataByDate[p.date][p.topic]++;
+    if (p.sentiment !== 'Neutro' && data[p.topic] && data[p.topic][p.sentiment] !== undefined) {
+      data[p.topic][p.sentiment]++
     }
-  });
-  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b));
+  })
+  const labels = allTopics.filter(t => t !== 'Geral')
+  return {
+    labels: labels,
+    datasets: allSentiments.map(sentiment => ({
+      label: sentiment,
+      data: labels.map(topic => data[topic][sentiment]),
+      backgroundColor: SENTIMENT_CONFIG[sentiment].color
+    }))
+  }
+})
+
+const topicEvolutionData = computed(() => {
+  const dataByDate = {}
+  filteredData.value.forEach(p => {
+    if (!dataByDate[p.date]) dataByDate[p.date] = 0
+    dataByDate[p.date]++
+  })
+  const sortedDates = Object.keys(dataByDate).sort((a, b) => new Date(a) - new Date(b))
+  const color = TOPIC_CONFIG[selectedTopic.value]?.color || '#333'
   return {
     labels: sortedDates.map(d => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
-    datasets: allTopics.value.map(topic => ({
-      label: topic,
-      data: sortedDates.map(date => (dataByDate[date][topic] || 0)),
-      borderColor: TOPIC_CONFIG[topic].color,
-      backgroundColor: TOPIC_CONFIG[topic].color,
+    datasets: [{
+      label: `Menções de "${selectedTopic.value}"`,
+      data: sortedDates.map(date => (dataByDate[date] || 0)),
+      borderColor: color,
+      backgroundColor: `${color}33`,
       fill: true,
-      tension: 0.2
-    }))
-  };
-});
-
-const emotionsByTopicData = computed(() => {
-  const data = {};
-  allTopics.value.forEach(t => {
-    data[t] = {};
-    allEmotions.value.forEach(e => data[t][e] = 0);
-  });
-  processedData.value.forEach(p => {
-    if (data[p.topic] && data[p.topic][p.emotion] !== undefined) {
-      data[p.topic][p.emotion]++;
-    }
-  });
-  return {
-    labels: allTopics.value,
-    datasets: allEmotions.value.map(emotion => ({
-      label: emotion,
-      data: allTopics.value.map(topic => data[topic][emotion]),
-      backgroundColor: TOPICS_EMOTION_CONFIG[emotion].color
-    }))
-  };
-});
+      tension: 0.4
+    }]
+  }
+})
 
 const wordCloudData = computed(() => {
-  const wordCounts = {};
-  const filteredText = processedData.value
-    .filter(p => p.topic === selectedTopicForWordCloud.value)
+  const wordCounts = {}
+  const filteredText = filteredData.value
     .map(p => p.text)
-    .join(' ');
+    .join(' ')
 
-  filteredText.toLowerCase().replace(/[^a-zà-ú\s]/g, '').split(/\s+/).filter(word => word.length > 3 && !stopwords.has(word)).forEach(word => {
-    wordCounts[word] = (wordCounts[word] || 0) + 1;
-  });
+  filteredText.toLowerCase().replace(/[^a-zà-ú\s]/g, '').split(/\s+/).filter(word => word.length > 3 && !STOPWORDS_PT.has(word)).forEach(word => {
+    wordCounts[word] = (wordCounts[word] || 0) + 1
+  })
 
-  const sortedWords = Object.entries(wordCounts).sort(([, a], [, b]) => b - a).slice(0, 50);
-  const max = sortedWords[0]?.[1] || 1;
-  const topicColor = TOPIC_CONFIG[selectedTopicForWordCloud.value]?.color || '#333';
+  const sortedWords = Object.entries(wordCounts).sort(([, a], [, b]) => b - a).slice(0, 50)
+  if (sortedWords.length === 0) return []
 
-  return sortedWords.map(([text, value]) => ({
-    text,
-    value,
-    size: 14 + (value / max) * 40,
-    opacity: 0.6 + (value / max) * 0.4,
-    weight: 400 + Math.round((value / max) * 4) * 100,
-    color: topicColor
-  }));
-});
+  const max = sortedWords[0][1]
+  const min = sortedWords[sortedWords.length - 1][1] || 0
+  const topicColor = TOPIC_CONFIG[selectedTopic.value]?.color || '#333'
 
-const stackedAreaOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { stacked: true } }, plugins: { legend: { position: 'top' } } };
-const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { x: { stacked: false }, y: { stacked: false } } };
+  return sortedWords.map(([text, value]) => {
+    const weight = (max - min) > 0 ? (value - min) / (max - min) : 0.5
+    return {
+      text,
+      value,
+      size: 14 + (weight * 30),
+      opacity: 0.6 + (weight * 0.4),
+      weight: 400 + Math.round(weight * 3) * 100,
+      color: topicColor
+    }
+  }).sort(() => Math.random() - 0.5)
+})
+
+// NOVO GRÁFICO: EMOÇÕES (O "PORQUÊ")
+const emotionBreakdownData = computed(() => {
+  const data = {}
+  allEmotions.forEach(e => { data[e] = 0 })
+
+  filteredData.value.forEach(p => {
+    if (p.emotion !== 'Geral' && data[p.emotion] !== undefined) {
+      data[p.emotion]++
+    }
+  })
+  const labels = allEmotions.filter(e => e !== 'Geral')
+  return {
+    labels: labels,
+    datasets: [{
+      label: 'Contagem de Emoções',
+      data: labels.map(emotion => data[emotion]),
+      backgroundColor: labels.map(emotion => EMOTION_CONFIG[emotion].color)
+    }]
+  }
+})
+
+// NOVO COMPONENTE: TOP POSTS (O "ONDE")
+const topPostsData = computed(() => {
+  const postCounts = new Map()
+  filteredData.value.forEach(p => {
+    const postId = p.postRef.publicacao_n
+    const currentCount = postCounts.get(postId)?.count || 0
+    postCounts.set(postId, { post: p.postRef, count: currentCount + 1 })
+  })
+
+  return Array.from(postCounts.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+})
+
+const lineOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#555' } },
+    y: { beginAtZero: true, grid: { color: '#ecf0f1' }, ticks: { color: '#555' } }
+  }
+}
+
+const groupedBarOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom' } },
+  scales: { x: { stacked: false, grid: { display: false }, ticks: { color: '#555' } }, y: { stacked: false, beginAtZero: true, grid: { color: '#ecf0f1' }, ticks: { color: '#555' } } },
+  onHover: (event, chartElement) => {
+    const canvas = event.native?.target
+    if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default'
+  }
+}
+
+const barOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#555' } },
+    y: { beginAtZero: true, grid: { color: '#ecf0f1' }, ticks: { color: '#555' } }
+  }
+}
+
 </script>
 
 <style scoped>
-:root {
+.dashboard-page {
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
   --text-primary: #2c3e50;
   --text-secondary: #555;
   --border-color: #e0e0e0;
-  --shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-  --border-radius: 12px;
-}
-
-.dashboard-page {
-  padding: 1rem;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --border-radius: 10px;
+  --primary-color: #3498db;
+  padding: 1.5rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
 }
 
-.header-controls {
+.header-controls,
+.filter-bar {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .main-title {
@@ -238,87 +397,57 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
 .file-selector {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   background-color: var(--card-bg);
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  width: 100%;
-  justify-content: space-between;
-  box-sizing: border-box;
-}
-
-.file-selector label {
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.file-selector select {
-  padding: .6rem 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background-color: #fff;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-transform: capitalize;
-  flex-grow: 1;
-  width: 100%;
+  margin-left: auto;
 }
 
 .filter-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
   background-color: #fff;
-  padding: 1rem;
+  padding: 1rem 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  margin-bottom: 1.5rem;
 }
 
 .filter-group {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
-  width: 100%;
 }
 
 .filter-group label {
   font-weight: 500;
   color: var(--text-secondary);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .filter-group input[type="date"],
+.file-selector select,
 .filter-group select {
-  width: 100%;
   box-sizing: border-box;
-  padding: 0.6rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
   background-color: #fff;
   color: var(--text-primary);
-}
-
-.filter-group input:disabled,
-.filter-group select:disabled {
-  background-color: #f8f9fa;
-  cursor: not-allowed;
+  height: 38px;
+  cursor: pointer;
 }
 
 .reset-group {
-  align-items: flex-end;
+  margin-left: auto;
 }
 
 .reset-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0.6rem 1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
   background-color: #f0f0f0;
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -327,22 +456,51 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 0.2s ease;
-  width: 100%;
-  justify-content: center;
+  height: 38px;
 }
 
-.reset-btn:hover:not(:disabled) {
+.reset-btn:hover {
   background-color: #e0e0e0;
 }
 
-.reset-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.active-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--card-bg);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.filter-tag {
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.btn-clear-filter {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-clear-filter:hover {
+  text-decoration: underline;
 }
 
 .dashboard-content {
   position: relative;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 .feedback-state {
@@ -365,41 +523,28 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   background-color: rgba(248, 249, 250, 0.85);
   backdrop-filter: blur(2px);
   border-radius: var(--border-radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .error-overlay {
   background-color: rgba(255, 235, 235, 0.9);
-}
-
-.error-overlay p {
   color: #c0392b;
-  font-weight: 500;
-}
-
-.feedback-state pre {
-  background-color: #fdd;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-  font-size: 0.8rem;
-  width: 100%;
-  max-width: 90vw;
-  overflow-x: auto;
-  text-align: left;
-  box-sizing: border-box;
 }
 
 .no-data-state {
   color: var(--text-secondary);
-  font-size: 1.2rem;
-  min-height: 400px;
+  font-size: 1.1rem;
+  min-height: 200px;
 }
 
 .spinner {
-  width: 50px;
-  height: 50px;
-  border: 5px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #3498db;
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-left-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -411,7 +556,8 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   }
 }
 
-.dashboard-grid-topicos {
+/* Layout dos Gráficos (ATUALIZADO) */
+.topics-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.5rem;
@@ -422,140 +568,143 @@ const groupedBarOptions = { responsive: true, maintainAspectRatio: false, plugin
   padding: 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  height: 450px;
   display: flex;
   flex-direction: column;
+  height: 450px;
+  overflow: hidden;
+  /* Garante que o conteúdo não vaze */
 }
 
 .chart-title {
   font-size: 1.1rem;
   font-weight: 600;
+  margin-bottom: 1.5rem;
   color: var(--text-primary);
-  margin: 0;
   text-align: center;
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
-.card-header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.card-header .chart-title {
-  text-align: left;
-}
-
-.card-header .topic-select {
-  padding: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background-color: #fff;
-  width: 100%;
+.full-width {
+  grid-column: 1 / -1;
+  height: 450px;
 }
 
 .word-cloud-container {
-  flex-grow: 1;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   align-items: center;
-  gap: 8px 12px;
-  padding: 1rem 0;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  flex-grow: 1;
   overflow-y: auto;
-  line-height: 1.2;
+  padding: 1rem;
+  min-height: 300px;
 }
 
-.word-cloud-container span {
+.word-cloud-item {
   display: inline-block;
-  transition: transform 0.2s ease;
+  cursor: default;
+  transition: all 0.2s ease;
+  line-height: 1;
 }
 
-.word-cloud-container span:hover {
+.word-cloud-item:hover {
   transform: scale(1.1);
 }
 
-@media (min-width: 576px) {
-  .reset-btn {
-    width: auto;
-  }
+.placeholder-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  text-align: center;
+  padding: 1rem;
+  height: 100%;
 }
 
-@media (min-width: 768px) {
-  .dashboard-page {
-    padding: 2rem;
-  }
-
-  .header-controls {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .main-title {
-    font-size: 2.25rem;
-  }
-
-  .file-selector {
-    width: auto;
-  }
-
-  .file-selector select {
-    width: auto;
-    min-width: 200px;
-  }
-
-  .filter-bar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    padding: 1rem 1.5rem;
-  }
-
-  .filter-group {
-    flex-direction: row;
-    align-items: center;
-    width: auto;
-  }
-
-  .filter-group input[type="date"],
-  .filter-group select {
-    width: auto;
-  }
-
-  .reset-group {
-    align-self: flex-end;
-  }
-
-  .reset-btn {
-    width: auto;
-  }
+.placeholder-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
 }
+
+/* NOVO: Estilos da Lista de Posts Relevantes */
+.list-card {
+  height: 450px;
+  /* Garante altura consistente */
+}
+
+.posts-list-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  /* Espaço para a barra de scroll */
+}
+
+.posts-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.post-link {
+  display: block;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.post-link:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  border-color: var(--primary-color);
+}
+
+.post-id {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.post-description {
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0.5rem 0;
+  color: var(--text-secondary);
+}
+
+.post-count {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  color: #fff;
+  background-color: #ccc;
+  /* Cor fallback */
+}
+
+.post-count i {
+  margin-right: 0.25rem;
+}
+
 
 @media (min-width: 992px) {
-  .dashboard-grid-topicos {
-    grid-template-columns: 1fr 1fr;
+  .topics-grid {
+    /* Layout 2x2 para os 4 gráficos dinâmicos */
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .full-width {
-    grid-column: 1/-1;
-  }
-
-  .chart-title {
-    font-size: 1.25rem;
-  }
-
-  .card-header {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 1rem;
-  }
-
-  .card-header .topic-select {
-    width: auto;
-    min-width: 200px;
+    grid-column: 1 / -1;
   }
 }
 </style>

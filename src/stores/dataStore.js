@@ -29,11 +29,12 @@ export const useDataStore = defineStore('data', () => {
   const error = ref(null)
 
   const availableFiles = ref([
-    'Mancha Verde vs Gaviões da Fiel violência_progress.json',
-    'sport recife violencia_progress.json',
-    'sport recife x santa cruz_progress.json',
-    'Torcida Garra CRB vs Mancha Azul CSA violência_progress.json',
-    'Torcida Jovem do Sport vs Inferno Coral Santa Cruz violência_progress.json',
+    'Mancha Verde vs Gaviões da Fiel.json',
+    'sport recife violencia.json',
+    'sport recife x santa cruz.json',
+    'Torcida Garra CRB vs Mancha Azul CSA.json',
+    'Torcida Jovem do Sport vs Inferno Coral Santa Cruz.json',
+    'Torcida Organizada Bamor vs Torcida Uniformizada os Imbativeis.json',
   ])
   const selectedFile = ref(availableFiles.value[0])
 

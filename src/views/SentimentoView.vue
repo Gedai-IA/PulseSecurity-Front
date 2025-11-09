@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-page">
     <header class="header-controls">
-      <h1 class="main-title">Relatório de Análise de Emoções</h1>
+      <h1 class="main-title">Relatório de Análise de Sentimento</h1>
       <div class="file-selector">
         <label for="json-select">Fonte de Dados:</label>
         <select id="json-select" v-model="dataStore.selectedFile" @change="dataStore.loadData()"
@@ -53,33 +53,33 @@
       <div v-else-if="processedData.length > 0" class="dashboard-grid">
         <div class="chart-card">
           <div class="chart-header">
-            <h2 class="chart-title">Distribuição de Emoções</h2>
-            <button v-if="selectedEmotion" @click="resetEmotionFilter" class="btn-reset-chart">
+            <h2 class="chart-title">Distribuição de Sentimento</h2>
+            <button v-if="selectedSentiment" @click="resetSentimentFilter" class="btn-reset-chart">
               Limpar filtro
             </button>
           </div>
           <div class="chart-container">
-            <Doughnut :data="emotionDistributionData" :options="doughnutOptions" @click="handleChartClick"
+            <Doughnut :data="sentimentDistributionData" :options="doughnutOptions" @click="handleChartClick"
               ref="doughnutChartRef" />
           </div>
         </div>
         <div class="chart-card full-width-card">
           <div class="chart-header">
             <h2 class="chart-title">
-              {{ selectedEmotion
-                ? `Volume de Emoção "${selectedEmotion}" ao Longo do Tempo`
-                : 'Volume de Emoções ao Longo do Tempo'
+              {{ selectedSentiment
+                ? `Volume de Sentimento "${selectedSentiment}" ao Longo do Tempo`
+                : 'Volume de Sentimentos (Positivo vs. Negativo) ao Longo do Tempo'
               }}
             </h2>
           </div>
           <div class="chart-container">
-            <Line :data="finalEmotionOverTimeData" :options="lineChartOptions" />
+            <Line :data="finalSentimentOverTimeData" :options="lineChartOptions" />
           </div>
         </div>
       </div>
 
       <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
-        <p>Nenhum dado de emoção encontrado para os filtros selecionados.</p>
+        <p>Nenhum dado de sentimento encontrado para os filtros selecionados.</p>
       </div>
     </main>
   </div>
@@ -94,13 +94,13 @@ import {
   Chart as ChartJS, Title, Tooltip, Legend, ArcElement, PointElement,
   LineElement, CategoryScale, LinearScale, Filler
 } from 'chart.js';
-import { EMOTION_CONFIG, allEmotions, getEmotion } from '@/utils/emotionClassifier.js';
+import { SENTIMENT_CONFIG, allSentiments, getSentiment } from '@/utils/sentimentClassifier.js';
 
 ChartJS.register(Title, Tooltip, Legend, ArcElement, PointElement, LineElement, CategoryScale, LinearScale, Filler);
 
 const dataStore = useDataStore();
 const doughnutChartRef = ref(null);
-const selectedEmotion = ref(null);
+const selectedSentiment = ref(null);
 
 const processedData = computed(() => {
   return dataStore.filteredPublications.flatMap(post => {
@@ -110,42 +110,42 @@ const processedData = computed(() => {
 
     return allPostComments.map(comment => ({
       date: date.toISOString().split('T')[0],
-      emotion: getEmotion(comment.text || ''),
+      sentiment: getSentiment(comment.text || ''),
     }));
   })
-    .filter(item => item.emotion !== 'Neutro');
+    .filter(item => item.sentiment !== 'Neutro');
 });
 
-const emotionDistributionData = computed(() => {
+const sentimentDistributionData = computed(() => {
   const counts = {};
-  allEmotions.forEach(e => counts[e] = 0);
+  allSentiments.forEach(s => counts[s] = 0);
 
   processedData.value.forEach(item => {
-    if (counts[item.emotion] !== undefined) {
-      counts[item.emotion]++;
+    if (counts[item.sentiment] !== undefined) {
+      counts[item.sentiment]++;
     }
   });
 
   return {
-    labels: allEmotions,
+    labels: allSentiments,
     datasets: [{
-      data: allEmotions.map(e => counts[e]),
-      backgroundColor: allEmotions.map(e => EMOTION_CONFIG[e].color)
+      data: allSentiments.map(s => counts[s]),
+      backgroundColor: allSentiments.map(s => SENTIMENT_CONFIG[s].color)
     }]
   };
 });
 
-const emotionOverTimeData = computed(() => {
+const sentimentOverTimeData = computed(() => {
   const dataByDate = {};
 
   processedData.value.forEach(item => {
     const dateKey = item.date;
     if (!dataByDate[dateKey]) {
       dataByDate[dateKey] = {};
-      allEmotions.forEach(e => dataByDate[dateKey][e] = 0);
+      allSentiments.forEach(s => dataByDate[dateKey][s] = 0);
     }
-    if (dataByDate[dateKey][item.emotion] !== undefined) {
-      dataByDate[dateKey][item.emotion]++;
+    if (dataByDate[dateKey][item.sentiment] !== undefined) {
+      dataByDate[dateKey][item.sentiment]++;
     }
   });
 
@@ -153,25 +153,25 @@ const emotionOverTimeData = computed(() => {
 
   return {
     labels: sortedDates.map(date => new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
-    datasets: allEmotions.map(emotion => ({
-      label: emotion,
-      data: sortedDates.map(date => dataByDate[date][emotion] || 0),
-      borderColor: EMOTION_CONFIG[emotion].color,
-      backgroundColor: `${EMOTION_CONFIG[emotion].color}33`,
+    datasets: allSentiments.map(sentiment => ({
+      label: sentiment,
+      data: sortedDates.map(date => dataByDate[date][sentiment] || 0),
+      borderColor: SENTIMENT_CONFIG[sentiment].color,
+      backgroundColor: `${SENTIMENT_CONFIG[sentiment].color}33`,
       fill: true,
       tension: 0.4
     }))
   };
 });
 
-const finalEmotionOverTimeData = computed(() => {
-  if (!selectedEmotion.value) {
-    return emotionOverTimeData.value;
+const finalSentimentOverTimeData = computed(() => {
+  if (!selectedSentiment.value) {
+    return sentimentOverTimeData.value;
   }
   return {
-    ...emotionOverTimeData.value,
-    datasets: emotionOverTimeData.value.datasets.filter(
-      ds => ds.label === selectedEmotion.value
+    ...sentimentOverTimeData.value,
+    datasets: sentimentOverTimeData.value.datasets.filter(
+      ds => ds.label === selectedSentiment.value
     )
   };
 });
@@ -184,7 +184,7 @@ onMounted(() => {
 
 const resetAllFilters = () => {
   dataStore.resetFilters();
-  resetEmotionFilter();
+  resetSentimentFilter();
 };
 
 const handleChartClick = (event) => {
@@ -194,14 +194,14 @@ const handleChartClick = (event) => {
   const elements = getElementAtEvent(chart, event);
   if (elements.length > 0) {
     const { index } = elements[0];
-    const newEmotion = emotionDistributionData.value.labels[index];
+    const newSentiment = sentimentDistributionData.value.labels[index];
 
-    selectedEmotion.value = selectedEmotion.value === newEmotion ? null : newEmotion;
+    selectedSentiment.value = selectedSentiment.value === newSentiment ? null : newSentiment;
   }
 };
 
-const resetEmotionFilter = () => {
-  selectedEmotion.value = null;
+const resetSentimentFilter = () => {
+  selectedSentiment.value = null;
 };
 
 const baseChartOptions = {

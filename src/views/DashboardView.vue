@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-page">
     <header class="header-controls">
-      <h1 class="main-title">Dashboard PulseSecurity</h1>
+      <h1 class="main-title">Dashboard Pulse Security</h1>
       <div class="file-selector">
         <label for="json-select">Fonte de Dados:</label>
         <select id="json-select" v-model="dataStore.selectedFile" @change="dataStore.loadData()"
@@ -40,8 +40,17 @@
       </div>
     </div>
 
-    <main class="dashboard-content">
+    <div v-if="selectedTopicFilter" class="active-filter-bar">
+      <span>Filtrando por Tópico:</span>
+      <span class="filter-tag" :style="{ backgroundColor: getTopicColor(selectedTopicFilter) }">
+        {{ selectedTopicFilter }}
+      </span>
+      <button @click="resetTopicFilter" class="btn-clear-filter">
+        &times; Limpar
+      </button>
+    </div>
 
+    <main class="dashboard-content">
       <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
@@ -51,66 +60,78 @@
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-if="!dataStore.error && dataStore.filteredPublications.length > 0" class="dashboard-summary">
+      <div v-if="!dataStore.error && processedData.length > 0" class="dashboard-summary">
 
         <div class="kpi-grid">
           <div class="kpi-card">
             <i class="fas fa-file-alt kpi-icon"></i>
             <div>
-              <h3 class="kpi-title">Total de Publicações</h3>
+              <h3 class="kpi-title">
+                Total de Publicações
+                <span class="tooltip-trigger"
+                  data-tooltip="Número total de publicações (vídeos) únicos no período selecionado.">
+                  <i class="fas fa-info-circle"></i>
+                </span>
+              </h3>
               <p class="kpi-value">{{ summaryStats.totalPublications }}</p>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <i class="fas fa-handshake kpi-icon"></i>
-            <div>
-              <h3 class="kpi-title">Total de Interações</h3>
-              <p class="kpi-value">{{ summaryStats.totalInteractions }}</p>
             </div>
           </div>
           <div class="kpi-card">
             <i class="fas fa-comments kpi-icon"></i>
             <div>
-              <h3 class="kpi-title">Total de Comentários</h3>
+              <h3 class="kpi-title">
+                Total de Comentários
+                <span class="tooltip-trigger" data-tooltip="Soma de todos os comentários e respostas analisados.">
+                  <i class="fas fa-info-circle"></i>
+                </span>
+              </h3>
               <p class="kpi-value">{{ summaryStats.totalComments }}</p>
             </div>
           </div>
-          <div class="kpi-card">
-            <i class="fas fa-eye kpi-icon"></i>
+          <div class="kpi-card" :class="{ 'highlight-red': summaryStats.threatCount > 0 }">
+            <i class="fas fa-exclamation-triangle kpi-icon"></i>
             <div>
-              <h3 class="kpi-title">Média de Views / Post</h3>
-              <p class="kpi-value">{{ summaryStats.avgViews }}</p>
+              <h3 class="kpi-title">
+                Menções de Ameaça
+                <span class="tooltip-trigger"
+                  data-tooltip="Número de comentários ou descrições classificados no tópico 'Ameaças e Riscos'.">
+                  <i class="fas fa-info-circle"></i>
+                </span>
+              </h3>
+              <p class="kpi-value">{{ summaryStats.threatCount }}</p>
             </div>
           </div>
-          <div class="kpi-card">
-            <i class="fas fa-thumbs-up kpi-icon"></i>
+          <div class="kpi-card" :class="{ 'highlight-red': summaryStats.negativeSentimentPercent > 20 }">
+            <i class="fas fa-shield-alt kpi-icon"></i>
             <div>
-              <h3 class="kpi-title">Média de Likes / Post</h3>
-              <p class="kpi-value">{{ summaryStats.avgLikes }}</p>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <i class="fas fa-share kpi-icon"></i>
-            <div>
-              <h3 class="kpi-title">Média de Compart. / Post</h3>
-              <p class="kpi-value">{{ summaryStats.avgShares }}</p>
+              <h3 class="kpi-title">
+                % Sentimento Negativo
+                <span class="tooltip-trigger"
+                  data-tooltip="Proporção de todos os comentários classificados como 'Negativo'.">
+                  <i class="fas fa-info-circle"></i>
+                </span>
+              </h3>
+              <p class="kpi-value">{{ summaryStats.negativeSentimentPercent.toFixed(0) }}%</p>
             </div>
           </div>
         </div>
 
-        <div class="charts-row">
-          <div class="chart-card">
-            <h2 class="chart-title">Top 5 (Mais Curtidas)</h2>
-            <Bar :data="topLikesData" :options="topLikesOptions" ref="topLikesChartRef" class="clickable-chart" />
+        <div class="charts-row-dashboard">
+          <div class="chart-card chart-card-pie">
+            <h2 class="chart-title">Foco das Discussões (Clique para filtrar)</h2>
+            <Doughnut :data="topicDistributionData" :options="topicDoughnutOptions" @click="handleTopicClick"
+              ref="topicDoughnutRef" />
           </div>
-          <div class="chart-card">
-            <h2 class="chart-title">Top 5 (Mais Comentadas)</h2>
+          <div class="chart-card chart-card-line">
+            <h2 class="chart-title">
+              {{ selectedTopicFilter ? `Evolução de "${selectedTopicFilter}"` : 'Evolução de Ameaças' }}
+            </h2>
+            <Line :data="threatsOverTimeData" :options="lineOptions" />
+          </div>
+          <div class="chart-card chart-card-bar">
+            <h2 class="chart-title">Top 5 Posts (Mais Comentados)</h2>
             <Bar :data="topCommentsData" :options="topCommentsOptions" ref="topCommentsChartRef"
               class="clickable-chart" />
-          </div>
-          <div class="chart-card">
-            <h2 class="chart-title">Top 5 (Mais Vistas)</h2>
-            <Bar :data="topViewsData" :options="topViewsOptions" ref="topViewsChartRef" class="clickable-chart" />
           </div>
         </div>
 
@@ -124,144 +145,273 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { useDataStore } from '@/stores/dataStore';
-import { Bar } from 'vue-chartjs';
-import { getElementAtEvent } from 'vue-chartjs';
-import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from 'chart.js';
-import { formatNumber } from '@/utils/formatters.js';
+import { computed, onMounted, ref } from 'vue'
+import { useDataStore } from '@/stores/dataStore'
+import { Bar, Line, Doughnut } from 'vue-chartjs'
+import { getElementAtEvent } from 'vue-chartjs'
+import { Chart as ChartJS, Title, Tooltip as ChartJSTooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Filler } from 'chart.js'
+import { formatNumber } from '@/utils/formatters.js'
+import { getSentiment, SENTIMENT_CONFIG } from '@/utils/sentimentClassifier.js'
+import { getTopicFromText, TOPIC_CONFIG, allTopics } from '@/utils/topicClassifier.js'
 
-ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
+ChartJS.register(Title, ChartJSTooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Filler)
 
-const dataStore = useDataStore();
+const dataStore = useDataStore()
 
-const topLikesChartRef = ref(null);
-const topCommentsChartRef = ref(null);
-const topViewsChartRef = ref(null);
+const topCommentsChartRef = ref(null)
+const topicDoughnutRef = ref(null)
+
+const selectedTopicFilter = ref(null)
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
-    dataStore.loadData();
+    dataStore.loadData()
   }
-});
+})
+
+const getTopicColor = (topicName) => {
+  return TOPIC_CONFIG[topicName]?.color || '#95a5a6'
+}
 
 const resetAllFilters = () => {
-  if (typeof dataStore.resetFilters === 'function') {
-    dataStore.resetFilters();
-  } else {
-    dataStore.startDate = dataStore.minDate;
-    dataStore.endDate = dataStore.maxDate;
-    dataStore.selectedTag = 'Todas';
-  }
-};
+  dataStore.resetFilters()
+  resetTopicFilter()
+}
 
-const safeAvg = (total, count) => {
-  if (!count || count === 0) return 0;
-  return (total / count);
-};
+const resetTopicFilter = () => {
+  selectedTopicFilter.value = null
+}
+
+const processedData = computed(() => {
+  return dataStore.filteredPublications.flatMap(post => {
+    const allComments = (post.comments || []).flatMap(c => [
+      { text: c.text, type: 'comment' },
+      ...(c.replies || []).map(r => ({ text: r.text, type: 'reply' }))
+    ])
+
+    allComments.push({ text: post.description, type: 'description' })
+
+    return allComments.map(comment => {
+      const text = comment.text || ''
+      const sentiment = getSentiment(text)
+      const topic = getTopicFromText(text)
+      return {
+        postId: post.publicacao_n,
+        postRef: post,
+        text: text,
+        date: post.parsedDate,
+        sentiment: sentiment,
+        topic: topic
+      }
+    })
+  }).filter(d => d.date && d.topic !== 'Geral' && d.sentiment !== 'Neutro')
+})
+
+const filteredData = computed(() => {
+  if (!selectedTopicFilter.value) {
+    return processedData.value
+  }
+  return processedData.value.filter(d => d.topic === selectedTopicFilter.value)
+})
 
 const summaryStats = computed(() => {
-  const pubs = dataStore.filteredPublications;
-  const count = pubs.length;
-
-  if (count === 0) {
-    return {
-      totalPublications: '0', totalInteractions: '0', totalComments: '0',
-      avgViews: '0', avgLikes: '0', avgShares: '0',
-    };
+  const data = filteredData.value
+  const totalComments = data.length
+  if (totalComments === 0) {
+    return { totalPublications: 0, totalComments: 0, threatCount: 0, negativeSentimentPercent: 0 }
   }
 
-  const totals = pubs.reduce((acc, post) => {
-    acc.views += Number(post.views) || 0;
-    acc.likes += Number(post.likes) || 0;
-    acc.comments_count += Number(post.comments_count) || 0;
-    acc.shares += Number(post.shares) || 0;
-    acc.bookmarks += Number(post.bookmarks) || 0;
-    acc.totalComments += (post.comments || []).reduce((commentCount, c) => {
-      return commentCount + 1 + (c.replies || []).length;
-    }, 0);
-    return acc;
-  }, { views: 0, likes: 0, comments_count: 0, shares: 0, bookmarks: 0, totalComments: 0 });
+  const uniquePostIds = new Set(data.map(d => d.postId))
 
-  const totalInteractions = totals.likes + totals.comments_count + totals.shares + totals.bookmarks;
+  let threatCount = 0
+  let negativeCount = 0
+
+  data.forEach(item => {
+    if (item.topic === 'Ameaças e Riscos') {
+      threatCount++
+    }
+    if (item.sentiment === 'Negativo') {
+      negativeCount++
+    }
+  })
+
+  // Calcula % negativa usando os dados completos (processedData) para o KPI não mudar
+  const totalNegative = processedData.value.filter(d => d.sentiment === 'Negativo').length
+  const totalValidComments = processedData.value.length
+  const negativePercent = totalValidComments > 0 ? (totalNegative / totalValidComments) * 100 : 0
+
+  // O total de ameaças também deve vir dos dados completos
+  const totalThreats = processedData.value.filter(d => d.topic === 'Ameaças e Riscos').length
 
   return {
-    totalPublications: formatNumber(count),
-    totalInteractions: formatNumber(totalInteractions),
-    totalComments: formatNumber(totals.totalComments),
-    avgViews: formatNumber(safeAvg(totals.views, count)),
-    avgLikes: formatNumber(safeAvg(totals.likes, count)),
-    avgShares: formatNumber(safeAvg(totals.shares, count)),
-  };
-});
+    totalPublications: formatNumber(uniquePostIds.size),
+    totalComments: formatNumber(totalComments), // Comentários no filtro
+    threatCount: formatNumber(totalThreats), // Ameaças totais
+    negativeSentimentPercent: negativePercent // % Negativo total
+  }
+})
 
-const getTopPosts = (metric) => {
-  return [...dataStore.filteredPublications]
-    .sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0))
-    .slice(0, 5)
-    .reverse();
-};
+const topicDistributionData = computed(() => {
+  const topicCounts = {}
+  allTopics.forEach(topic => { topicCounts[topic] = 0 })
 
-const formatChartData = (posts, metric, color) => {
+  processedData.value.forEach(item => {
+    if (topicCounts[item.topic] !== undefined) {
+      topicCounts[item.topic]++
+    }
+  })
+
+  const labels = allTopics.filter(t => t !== 'Geral')
+  const data = labels.map(topic => topicCounts[topic])
+  const colors = labels.map(topic => TOPIC_CONFIG[topic].color)
+
   return {
-    labels: posts.map(p => `#${p.publicacao_n}`),
+    labels: labels,
     datasets: [{
-      label: `Total`,
-      data: posts.map(p => Number(p[metric]) || 0),
-      backgroundColor: color,
-      borderRadius: 4,
-      postDescriptions: posts.map(p => p.description || 'Sem descrição')
+      data: data,
+      backgroundColor: colors,
     }]
-  };
-};
-
-const topLikesPosts = computed(() => getTopPosts('likes'));
-const topLikesData = computed(() => formatChartData(topLikesPosts.value, 'likes', '#27ae60'));
-
-const topCommentsPosts = computed(() => getTopPosts('comments_count'));
-const topCommentsData = computed(() => formatChartData(topCommentsPosts.value, 'comments_count', '#2980b9'));
-
-const topViewsPosts = computed(() => getTopPosts('views'));
-const topViewsData = computed(() => formatChartData(topViewsPosts.value, 'views', '#f39c12'));
-
-const handleChartClick = (event, chartRef, posts) => {
-  const chart = chartRef.value?.chart;
-  if (!chart) return;
-
-  const elements = getElementAtEvent(chart, event);
-  if (elements.length === 0) return;
-
-  const { index } = elements[0];
-  const post = posts[index];
-
-  if (post && post.url) {
-    window.open(post.url, '_blank', 'noopener,noreferrer');
-  } else {
-    console.warn('URL não encontrado para a publicação:', post);
   }
-};
+})
 
-const createBarOptions = (postsRef, chartRef) => ({
+const threatsOverTimeData = computed(() => {
+  const data = filteredData.value
+  const countsByDate = {}
+
+  data.forEach(item => {
+    const dateKey = item.date.toISOString().split('T')[0]
+    countsByDate[dateKey] = (countsByDate[dateKey] || 0) + 1
+  })
+
+  const sortedDates = Object.keys(countsByDate).sort((a, b) => new Date(a) - new Date(b))
+  const labels = sortedDates.map(d => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }))
+  const chartData = sortedDates.map(date => countsByDate[date])
+
+  const filterLabel = selectedTopicFilter.value || 'Ameaças e Riscos'
+  const filterColor = getTopicColor(filterLabel)
+
+  if (!selectedTopicFilter.value) {
+    const threatData = processedData.value.filter(d => d.topic === 'Ameaças e Riscos')
+    const threatCountsByDate = {}
+    threatData.forEach(item => {
+      const dateKey = item.date.toISOString().split('T')[0]
+      threatCountsByDate[dateKey] = (threatCountsByDate[dateKey] || 0) + 1
+    })
+    const sortedThreatDates = Object.keys(threatCountsByDate).sort((a, b) => new Date(a) - new Date(b))
+    return {
+      labels: sortedThreatDates.map(d => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
+      datasets: [{
+        label: 'Menções de Ameaça',
+        data: sortedThreatDates.map(date => threatCountsByDate[date]),
+        borderColor: TOPIC_CONFIG['Ameaças e Riscos'].color,
+        backgroundColor: `${TOPIC_CONFIG['Ameaças e Riscos'].color}33`,
+        fill: true,
+        tension: 0.4
+      }]
+    }
+  }
+
+  return {
+    labels: labels,
+    datasets: [{
+      label: `Menções de "${filterLabel}"`,
+      data: chartData,
+      borderColor: filterColor,
+      backgroundColor: `${filterColor}33`,
+      fill: true,
+      tension: 0.4
+    }]
+  }
+})
+
+const topCommentsData = computed(() => {
+  const postsMap = new Map()
+  filteredData.value.forEach(item => {
+    postsMap.set(item.postId, item.postRef)
+  })
+
+  const posts = Array.from(postsMap.values())
+
+  const sortedPosts = [...posts]
+    .sort((a, b) => (Number(b['comments_count']) || 0) - (Number(a['comments_count']) || 0))
+    .slice(0, 5)
+    .reverse()
+
+  return {
+    labels: sortedPosts.map(p => `#${p.publicacao_n}`),
+    datasets: [{
+      label: `Total de Comentários`,
+      data: sortedPosts.map(p => Number(p.comments_count) || 0),
+      backgroundColor: '#3498db',
+      borderRadius: 4,
+      postDescriptions: sortedPosts.map(p => p.description || 'Sem descrição')
+    }]
+  }
+})
+
+const handleTopicClick = (event) => {
+  const chart = topicDoughnutRef.value?.chart
+  if (!chart) return
+
+  const elements = getElementAtEvent(chart, event)
+  if (elements.length > 0) {
+    const { index } = elements[0]
+    const topicLabel = chart.data.labels[index]
+
+    selectedTopicFilter.value = selectedTopicFilter.value === topicLabel ? null : topicLabel
+  }
+}
+
+const lineOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false } },
+    y: { beginAtZero: true, grid: { color: '#ecf0f1' } }
+  }
+}
+
+const topicDoughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    // CORREÇÃO VISUAL 1: Legenda na parte de baixo
+    legend: { position: 'bottom' },
+    tooltip: {
+      callbacks: {
+        label: function (context) {
+          const label = context.label || ''
+          const value = context.parsed
+          const sum = context.chart.data.datasets[0].data.reduce((a, b) => a + b, 0)
+          const percentage = sum > 0 ? ((value / sum) * 100).toFixed(1) + '%' : '0%'
+          return ` ${label}: ${formatNumber(value)} (${percentage})`
+        }
+      }
+    }
+  },
+  onHover: (event, chartElement) => {
+    const canvas = event.native?.target
+    if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default'
+  }
+}
+
+const topCommentsOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   indexAxis: 'y',
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#333',
-      titleFont: { size: 14 },
-      bodyFont: { size: 12 },
-      padding: 10,
-      cornerRadius: 6,
       callbacks: {
         title: function (tooltipItems) {
-          const index = tooltipItems[0].dataIndex;
-          const label = tooltipItems[0].chart.data.labels[index];
-          const description = tooltipItems[0].dataset.postDescriptions[index];
-          return `${label}: ${description.substring(0, 50)}...`;
+          const index = tooltipItems[0].dataIndex
+          const label = tooltipItems[0].chart.data.labels[index]
+          const description = tooltipItems[0].dataset.postDescriptions[index]
+          return `${label}: ${description.substring(0, 50)}...`
         },
         label: function (context) {
-          return ` ${context.dataset.label}: ${formatNumber(context.parsed.x)}`;
+          return ` ${context.dataset.label}: ${formatNumber(context.parsed.x)}`
         }
       }
     }
@@ -269,25 +419,32 @@ const createBarOptions = (postsRef, chartRef) => ({
   scales: {
     x: {
       grid: { color: '#eee' },
-      ticks: {
-        color: '#555',
-        callback: function (value) { return formatNumber(value); }
-      }
+      ticks: { callback: function (value) { return formatNumber(value) } }
     },
-    y: { grid: { display: false }, ticks: { color: '#555' } }
+    y: { grid: { display: false } }
   },
   onHover: (event, chartElement) => {
-    const canvas = event.native?.target;
-    if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
+    const canvas = event.native?.target
+    if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default'
   },
-  onClick: (event) => handleChartClick(event, chartRef, postsRef.value)
-});
+  onClick: (event) => {
+    const chart = topCommentsChartRef.value?.chart
+    if (!chart) return
+    const elements = getElementAtEvent(chart, event)
+    if (elements.length === 0) return
+    const { index } = elements[0]
+    const label = chart.data.labels[index]
+    const postId = label.replace('#', '')
+    const post = dataStore.filteredPublications.find(p => p.publicacao_n == postId)
 
-const topLikesOptions = computed(() => createBarOptions(topLikesPosts, topLikesChartRef));
-const topCommentsOptions = computed(() => createBarOptions(topCommentsPosts, topCommentsChartRef));
-const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsChartRef));
+    if (post && post.url) {
+      window.open(post.url, '_blank', 'noopener,noreferrer')
+    } else {
+      console.warn('URL não encontrado para a publicação:', postId)
+    }
+  }
+}))
 </script>
-
 
 <style scoped>
 .dashboard-page {
@@ -299,6 +456,7 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   --border-radius: 10px;
   --primary-color: #3498db;
+  --danger-color: #c0392b;
 
   padding: 1.5rem;
   background-color: var(--primary-bg);
@@ -306,13 +464,13 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   font-family: 'Inter', sans-serif;
 }
 
-.header-controls {
+.header-controls,
+.filter-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
   gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .main-title {
@@ -330,38 +488,14 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  box-sizing: border-box;
-}
-
-.file-selector label {
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  font-size: 0.9rem;
-}
-
-.file-selector select {
-  padding: .5rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background-color: #fff;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-transform: capitalize;
-  min-width: 180px;
+  margin-left: auto;
 }
 
 .filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
   background-color: #fff;
   padding: 1rem 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  margin-bottom: 2rem;
 }
 
 .filter-group {
@@ -378,6 +512,7 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 }
 
 .filter-group input[type="date"],
+.file-selector select,
 .filter-group select {
   box-sizing: border-box;
   padding: 0.5rem 0.75rem;
@@ -387,12 +522,7 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   background-color: #fff;
   color: var(--text-primary);
   height: 38px;
-}
-
-.filter-group input:disabled,
-.filter-group select:disabled {
-  background-color: #f8f9fa;
-  cursor: not-allowed;
+  cursor: pointer;
 }
 
 .reset-group {
@@ -415,17 +545,43 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   height: 38px;
 }
 
-.reset-btn i {
-  font-size: 0.8em;
-}
-
-.reset-btn:hover:not(:disabled) {
+.reset-btn:hover {
   background-color: #e0e0e0;
 }
 
-.reset-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.active-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--card-bg);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.filter-tag {
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.btn-clear-filter {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-clear-filter:hover {
+  text-decoration: underline;
 }
 
 .dashboard-content {
@@ -453,28 +609,15 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   background-color: rgba(248, 249, 250, 0.85);
   backdrop-filter: blur(2px);
   border-radius: var(--border-radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .error-overlay {
   background-color: rgba(255, 235, 235, 0.9);
-}
-
-.error-overlay p {
   color: #c0392b;
-  font-weight: 500;
-}
-
-.feedback-state pre {
-  background-color: #fdd;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-  font-size: 0.8rem;
-  width: 100%;
-  max-width: 90vw;
-  overflow-x: auto;
-  text-align: left;
-  box-sizing: border-box;
 }
 
 .no-data-state {
@@ -501,126 +644,160 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
   margin-bottom: 2rem;
 }
 
 .kpi-card {
   background: var(--card-bg);
-  padding: 1rem;
+  padding: 1.25rem 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;
   gap: 1rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-left: 4px solid transparent;
 }
 
 .kpi-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .kpi-icon {
-  font-size: 1.8rem;
+  font-size: 2rem;
   color: var(--primary-color);
   opacity: 0.7;
-  flex-shrink: 0;
-}
-
-.kpi-card div {
-  text-align: left;
 }
 
 .kpi-title {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: var(--text-secondary);
   margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .kpi-value {
-  font-size: 1.6rem;
+  font-size: 1.8rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
-  line-height: 1.2;
 }
 
-.charts-row {
+.kpi-card.highlight-red {
+  border-left-color: var(--danger-color);
+}
+
+.kpi-card.highlight-red .kpi-icon {
+  color: var(--danger-color);
+}
+
+.kpi-card.highlight-red .kpi-value {
+  color: var(--danger-color);
+}
+
+.charts-row-dashboard {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto;
   gap: 1.5rem;
 }
 
 .chart-card {
   background-color: var(--card-bg);
-  padding: 1.5rem;
+  padding: 2.2rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  height: 400px;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.2s ease;
-}
-
-.chart-card:hover {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
 .chart-title {
-  font-size: 1.0rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   color: var(--text-primary);
   text-align: center;
   margin-top: 0;
+}
+
+.chart-card-pie {
+  height: 450px;
+}
+
+.chart-card-line {
+  height: 400px;
+}
+
+.chart-card-bar {
+  height: 400px;
 }
 
 .clickable-chart {
   cursor: pointer;
 }
 
-@media (min-width: 768px) {
-  .dashboard-page {
-    padding: 2rem;
-  }
+.tooltip-trigger {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+  color: #aaa;
+}
 
-  .main-title {
-    font-size: 2rem;
-  }
+.tooltip-trigger .fa-info-circle {
+  font-size: 0.9em;
+}
 
-  .kpi-grid {
-    gap: 1.5rem;
-  }
+.tooltip-trigger::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 200px;
+  max-width: 300px;
+  background-color: #333;
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-align: left;
 
-  .kpi-title {
-    font-size: 0.9rem;
-  }
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 20;
+}
 
-  .kpi-value {
-    font-size: 1.8rem;
-  }
-
-  .kpi-icon {
-    font-size: 2rem;
-  }
+.tooltip-trigger:hover::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 @media (min-width: 992px) {
-  .charts-row {
-    grid-template-columns: 1fr 1fr;
+  .charts-row-dashboard {
+    /* CORREÇÃO VISUAL 2: Grid 50/50 */
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .chart-card {
-    height: 420px;
+  .chart-card-pie {
+    grid-column: 1 / 2;
+    height: 400px;
   }
-}
 
-@media (min-width: 1200px) {
-  .charts-row {
-    grid-template-columns: 1fr 1fr 1fr;
+  .chart-card-line {
+    grid-column: 2 / 3;
+    height: 400px;
+  }
+
+  .chart-card-bar {
+    grid-column: 1 / 3;
+    height: 400px;
   }
 }
 </style>

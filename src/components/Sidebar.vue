@@ -23,13 +23,13 @@
       </RouterLink>
 
       <nav class="sidebar-nav">
+        <RouterLink to="/" class="nav-item" @click="toggleMenu">
+          <i class="fas fa-tachometer-alt"></i>
+          <span>Dashboard</span>
+        </RouterLink>
         <RouterLink to="/opinioes" class="nav-item" @click="toggleMenu">
           <i class="fas fa-comment-dots"></i>
           <span>Opiniões</span>
-        </RouterLink>
-        <RouterLink to="/emocoes" class="nav-item" @click="toggleMenu">
-          <i class="fas fa-face-smile"></i>
-          <span>Emoções</span>
         </RouterLink>
         <RouterLink to="/topicos" class="nav-item" @click="toggleMenu">
           <i class="fas fa-layer-group"></i>
@@ -50,30 +50,25 @@
           <i class="fas fa-user-circle user-icon"></i>
           <span class="user-name">Nome do usuário</span>
         </div>
-        <div class="user-actions">
-          <RouterLink to="/profile">
-            <i class="fas fa-id-badge"></i>
-            Perfil
-          </RouterLink>
-          <RouterLink to="/login">
-            <i class="fas fa-sign-out-alt"></i>
-            Sair
-          </RouterLink>
-        </div>
+        <a href="/login" class="footer-action" @click="toggleMenu">
+          <i class="fas fa-sign-out-alt"></i>
+        </a>
       </div>
     </aside>
   </div>
 </template>
 
 <script setup>
-import { RouterLink } from 'vue-router';
-import { ref } from 'vue';
+import { RouterLink } from 'vue-router'
+import { ref } from 'vue'
 
-const isMobileMenuOpen = ref(false);
+const isMobileMenuOpen = ref(false)
 
 const toggleMenu = () => {
-  isMobileMenuOpen.value = !isMobileMenuOpen.value;
-};
+  if (window.innerWidth < 768) {
+    isMobileMenuOpen.value = !isMobileMenuOpen.value
+  }
+}
 </script>
 
 <style scoped>
@@ -87,8 +82,10 @@ const toggleMenu = () => {
   transition: transform 0.3s ease-in-out;
   overflow-y: auto;
   width: 250px;
-  background-color: #fff;
+
+  background-color: #ffffff;
   border-right: 1px solid #e0e0e0;
+
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -102,7 +99,7 @@ const toggleMenu = () => {
   position: fixed;
   top: 15px;
   left: 15px;
-  z-index: 1001;
+  z-index: 900;
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -110,6 +107,7 @@ const toggleMenu = () => {
   font-size: 1.2rem;
   cursor: pointer;
   box-sizing: border-box;
+  color: #1f2937;
 }
 
 .sidebar-overlay {
@@ -150,86 +148,96 @@ const toggleMenu = () => {
 
 .sidebar-nav {
   flex-grow: 1;
-  padding: 20px 0;
+  padding: 10px 0;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  padding: 15px 20px;
+  padding: 14px 20px;
+  margin: 4px 10px;
   text-decoration: none;
-  color: #333;
-  font-size: 1.1rem;
+  color: #374151;
+  font-size: 1rem;
   font-weight: 500;
   gap: 15px;
   transition: background-color 0.2s ease, color 0.2s ease;
+  border-radius: 8px;
 }
 
 .nav-item:hover {
-  background-color: #f5f5f5;
+  background-color: #f3f4f6;
+  color: #111827;
 }
 
-.nav-item.router-link-active {
-  background-color: #f0f0f0;
-  color: #2c3e50;
+/* CORREÇÃO 1: Link Ativo */
+.nav-item.router-link-exact-active {
+  /* CORREÇÃO 2: Azul mais forte */
+  background-color: #dbeafe;
+  color: #2563eb;
   font-weight: 600;
 }
 
 .nav-item i {
-  font-size: 1.3rem;
-  color: #555;
+  font-size: 1.1rem;
+  width: 20px;
+  text-align: center;
+  color: #6b7280;
   transition: color 0.2s ease;
 }
 
-.nav-item.router-link-active i {
-  color: #2c3e50;
+.nav-item:hover i {
+  color: #111827;
+}
+
+/* CORREÇÃO 1: Link Ativo (Ícone) */
+.nav-item.router-link-exact-active i {
+  /* CORREÇÃO 2: Azul mais forte */
+  color: #2563eb;
 }
 
 .sidebar-footer {
   padding: 20px;
-  background-color: #f0f0f0;
-  text-align: center;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .user-profile {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  margin-bottom: 15px;
+  gap: 10px;
+  overflow: hidden;
 }
 
 .user-icon {
-  font-size: 2rem;
-  color: #555;
+  font-size: 1.8rem;
+  color: #4b5563;
 }
 
 .user-name {
-  font-weight: bold;
-  margin-top: 10px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.user-actions {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-}
-
-.user-actions a,
-.user-actions a:visited {
-  color: #555;
+.footer-action {
+  color: #6b7280;
   text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.95rem;
+  font-size: 1.1rem;
+  transition: color 0.2s ease;
+  padding: 5px;
 }
 
-.user-actions a i {
-  font-size: 1rem;
+.footer-action:hover {
+  /* CORREÇÃO 2: Azul mais forte */
+  color: #2563eb;
 }
 
 @media (min-width: 768px) {
-
   .sidebar {
     position: sticky;
     top: 0;
@@ -248,6 +256,7 @@ const toggleMenu = () => {
     display: block;
     padding: 20px;
     border-bottom: 1px solid #e0e0e0;
+    text-align: center;
   }
 }
 </style>

@@ -38,16 +38,18 @@ import { RouterLink } from 'vue-router';
 
 .login-button {
   padding: 10px 20px;
-  border: 1px solid #ccc;
-  background-color: #f0f0f0;
+  background-color: #3498db;
   text-decoration: none;
-  color: #333;
-  border-radius: 5px;
-  font-weight: bold;
+  color: #ffffff;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  transition: background-color 0.2s ease;
 }
 
 .login-button:hover {
-  background-color: #e0e0e0;
+  background-color: #2980b9;
 }
 
 @media (min-width: 768px) {

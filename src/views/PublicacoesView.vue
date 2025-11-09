@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard-page">
     <header class="header-controls">
-      <h1 class="main-title">Visualizador de Publicações</h1>
+      <h1 class="main-title">Explorador de Publicações</h1>
       <div class="file-selector">
         <label for="json-select">Fonte de Dados:</label>
         <select id="json-select" v-model="dataStore.selectedFile" @change="dataStore.loadData()"
@@ -17,6 +17,25 @@
       <div class="filter-group search-group">
         <i class="fas fa-search search-icon"></i>
         <input type="search" v-model="searchTerm" placeholder="Pesquisar por descrição ou #ID..." class="search-input">
+      </div>
+
+      <div class="filter-group">
+        <label for="topic-select">Tópico:</label>
+        <select id="topic-select" v-model="selectedTopic">
+          <option value="Todos">Todos os Tópicos</option>
+          <option v-for="topic in allTopics.filter(t => t !== 'Geral')" :key="topic" :value="topic">
+            {{ topic }}
+          </option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="sentiment-select">Sentimento:</label>
+        <select id="sentiment-select" v-model="selectedSentiment">
+          <option value="Todos">Todos os Sentimentos</option>
+          <option v-for="sentiment in allSentiments" :key="sentiment" :value="sentiment">
+            {{ sentiment }}
+          </option>
+        </select>
       </div>
 
       <div class="filter-group">
@@ -39,7 +58,7 @@
       </div>
 
       <div class="filter-group results-group">
-        <span class="results-count">{{ searchedPublications.length }} resultado(s)</span>
+        <span class="results-count">{{ enrichedPublications.length }} resultado(s)</span>
       </div>
       <div class="filter-group reset-group">
         <button @click="resetAllFilters" class="reset-btn" :disabled="dataStore.loading" title="Limpar Filtros">
@@ -60,20 +79,37 @@
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <div v-if="searchedPublications.length > 0" class="pub-list">
-        <div v-for="pub in searchedPublications" :key="pub.publicacao_n" class="pub-card">
+      <div v-if="enrichedPublications.length > 0" class="pub-list">
+        <div v-for="pub in enrichedPublications" :key="pub.publicacao_n" class="pub-card">
           <div class="pub-header">
             <span class="pub-id">#{{ pub.publicacao_n }}</span>
             <span class="pub-date">{{ pub.parsedDate.toLocaleDateString('pt-BR') }}</span>
           </div>
-          <p class="pub-description">{{ (pub.description || 'Sem descrição').substring(0, 150) }}...</p>
-          <div class="pub-stats">
-            <span><i class="fas fa-eye"></i> {{ formatNumber(pub.views) }}</span>
-            <span><i class="fas fa-thumbs-up"></i> {{ formatNumber(pub.likes) }}</span>
-            <span><i class="fas fa-comments"></i> {{ formatNumber(pub.comments_count) }}</span>
-            <span><i class="fas fa-share"></i> {{ formatNumber(pub.shares) }}</span>
+
+          <div class="pub-intelligence">
+            <span class="topic-tag" :style="{ backgroundColor: getTopicColor(pub.mainTopic) }">
+              <i :class="getTopicIcon(pub.mainTopic)"></i>
+              {{ pub.mainTopic }}
+            </span>
+            <span class="sentiment-tag" :style="{ color: getSentimentColor(pub.mainSentiment) }">
+              <i :class="getSentimentIcon(pub.mainSentiment)"></i>
+              {{ pub.mainSentiment }}
+            </span>
           </div>
-          <button @click="openModal(pub)" class="btn-details">Ver Detalhes</button>
+
+          <p class="pub-description">{{ (pub.description || 'Sem descrição').substring(0, 200) }}...</p>
+
+          <div v-if="pub.highlightComment" class="pub-featured-comment" :data-topic="pub.highlightComment.topic">
+            <i class="fas fa-comment-dots"></i>
+            <p>{{ pub.highlightComment.text.substring(0, 150) }}...</p>
+          </div>
+          <div v-else class="pub-featured-comment placeholder">
+            <i class="fas fa-comment-slash"></i>
+            <p>Nenhum comentário de destaque (Negativo ou Ameaça) encontrado.</p>
+          </div>
+
+          <button @click="openModal(pub)" class="btn-details">Ver Dossiê Completo ({{ pub.comments_count }}
+            comentários)</button>
         </div>
       </div>
 
@@ -85,27 +121,44 @@
     <div v-if="selectedPublication" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>Detalhes da Publicação #{{ selectedPublication.publicacao_n }}</h2>
+          <h2>Dossiê da Publicação #{{ selectedPublication.publicacao_n }}</h2>
           <button @click="closeModal" class="btn-close">&times;</button>
         </div>
         <div class="modal-body">
-          <a :href="selectedPublication.url" target="_blank" rel="noopener noreferrer" class="btn-tiktok">
-            <svg class="tiktok-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor">
+
+          <div class="video-preview-container" @click="openVideo(selectedPublication.url)"
+            title="Clique para ver o vídeo no TikTok">
+            <div class="video-overlay">
+              <i class="fas fa-play play-icon"></i>
+            </div>
+            <svg class="tiktok-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor">
               <path
                 d="M448 209.91a210.06 210.06 0 0 1-122.77-39.25V349.38A162.55 162.55 0 1 1 185 188.31V278.2a74.62 74.62 0 1 0 52.23 71.18V0l88 0a121.18 121.18 0 0 0 1.86 22.17h0A122.18 122.18 0 0 0 381 102.39a121.43 121.43 0 0 0 67 20.14z" />
             </svg>
-            <span>Visualizar no TikTok</span>
-          </a>
-          <p><strong>Descrição:</strong> {{ selectedPublication.description || 'N/A' }}</p>
-          <p><strong>Música:</strong> {{ selectedPublication.musicTitle || 'N/A' }}</p>
+          </div>
+
+          <p class="modal-section-title">Descrição</p>
+          <div class="modal-description">
+            <span class="topic-tag small"
+              :style="{ backgroundColor: getTopicColor(getTopicForText(selectedPublication.description)) }">
+              {{ getTopicForText(selectedPublication.description) }}
+            </span>
+            <span class="sentiment-tag small"
+              :style="{ color: getSentimentColor(getSentimentForText(selectedPublication.description)) }">
+              {{ getSentimentForText(selectedPublication.description) }}
+            </span>
+            <p>{{ selectedPublication.description || 'N/A' }}</p>
+          </div>
+
+          <p class="modal-section-title">Música</p>
+          <p class="modal-music"><i class="fas fa-music"></i> {{ selectedPublication.musicTitle || 'N/A' }}</p>
 
           <div class="modal-stats">
-            <span><i class="fas fa-eye"></i> {{ formatNumber(selectedPublication.views) }} Views</span>
-            <span><i class="fas fa-thumbs-up"></i> {{ formatNumber(selectedPublication.likes) }} Likes</span>
-            <span><i class="fas fa-comments"></i> {{ formatNumber(selectedPublication.comments_count) }}
-              Comentários</span>
-            <span><i class="fas fa-share"></i> {{ formatNumber(selectedPublication.shares) }} Compart.</span>
-            <span><i class="fas fa-bookmark"></i> {{ formatNumber(selectedPublication.bookmarks) }} Salvos</span>
+            <span><i class="fas fa-eye"></i> {{ formatNumber(selectedPublication.views) }}</span>
+            <span><i class="fas fa-thumbs-up"></i> {{ formatNumber(selectedPublication.likes) }}</span>
+            <span><i class="fas fa-comments"></i> {{ formatNumber(selectedPublication.comments_count) }}</span>
+            <span><i class="fas fa-share"></i> {{ formatNumber(selectedPublication.shares) }}</span>
+            <span><i class="fas fa-bookmark"></i> {{ formatNumber(selectedPublication.bookmarks) }}</span>
           </div>
 
           <div class="modal-tags">
@@ -118,11 +171,36 @@
           <div class="comment-list">
             <div v-for="comment in selectedPublication.comments" :key="comment.username + comment.text"
               class="comment-item">
-              <p><strong>{{ comment.username }}</strong> ({{ comment.likes }} <i class="fas fa-thumbs-up"></i>)</p>
+              <div class="comment-header">
+                <p><strong>{{ comment.username }}</strong> ({{ comment.likes }} <i class="fas fa-thumbs-up"></i>)</p>
+                <div class="comment-tags">
+                  <span class="topic-tag small"
+                    :style="{ backgroundColor: getTopicColor(getTopicForText(comment.text)) }">
+                    {{ getTopicForText(comment.text) }}
+                  </span>
+                  <span class="sentiment-tag small"
+                    :style="{ color: getSentimentColor(getSentimentForText(comment.text)) }">
+                    {{ getSentimentForText(comment.text) }}
+                  </span>
+                </div>
+              </div>
               <p class="comment-text">{{ comment.text }}</p>
+
               <div v-if="comment.replies && comment.replies.length > 0" class="comment-replies">
                 <div v-for="reply in comment.replies" :key="reply.username + reply.text" class="reply-item">
-                  <p><strong>{{ reply.username }}</strong> ({{ reply.likes }} <i class="fas fa-thumbs-up"></i>)</p>
+                  <div class="comment-header">
+                    <p><strong>{{ reply.username }}</strong> ({{ reply.likes }} <i class="fas fa-thumbs-up"></i>)</p>
+                    <div class="comment-tags">
+                      <span class="topic-tag small"
+                        :style="{ backgroundColor: getTopicColor(getTopicForText(reply.text)) }">
+                        {{ getTopicForText(reply.text) }}
+                      </span>
+                      <span class="sentiment-tag small"
+                        :style="{ color: getSentimentColor(getSentimentForText(reply.text)) }">
+                        {{ getSentimentForText(reply.text) }}
+                      </span>
+                    </div>
+                  </div>
                   <p class="comment-text">{{ reply.text }}</p>
                 </div>
               </div>
@@ -135,55 +213,132 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { useDataStore } from '@/stores/dataStore';
-import { formatNumber } from '@/utils/formatters.js';
+import { ref, computed, onMounted } from 'vue'
+import { useDataStore } from '@/stores/dataStore'
+import { formatNumber } from '@/utils/formatters.js'
+import { getSentiment, SENTIMENT_CONFIG, allSentiments } from '@/utils/sentimentClassifier.js'
+import { getTopicFromText, TOPIC_CONFIG, allTopics } from '@/utils/topicClassifier.js'
 
-const dataStore = useDataStore();
-const searchTerm = ref('');
-const selectedPublication = ref(null);
+const dataStore = useDataStore()
+const searchTerm = ref('')
+const selectedPublication = ref(null)
+
+const selectedTopic = ref('Todos')
+const selectedSentiment = ref('Todos')
 
 onMounted(() => {
   if (dataStore.publications.length === 0) {
-    dataStore.loadData();
+    dataStore.loadData()
   }
-});
+})
+
+const getTopicForText = (text) => getTopicFromText(text || '')
+const getSentimentForText = (text) => {
+  const sentiment = getSentiment(text || '')
+  return sentiment === 'Neutro' ? 'Geral' : sentiment
+}
+
+const getTopicColor = (topic) => TOPIC_CONFIG[topic]?.color || '#95a5a6'
+const getSentimentColor = (sentiment) => SENTIMENT_CONFIG[sentiment]?.color || '#2c3e50'
+
+const getTopicIcon = (topic) => {
+  const icons = {
+    'Ameaças e Riscos': 'fas fa-exclamation-triangle',
+    'Rivalidade Esportiva': 'fas fa-shield-alt',
+    'Segurança (Policial)': 'fas fa-shield-virus',
+    'Apoio e União': 'fas fa-hands-helping',
+    'Organização e Eventos': 'fas fa-calendar-alt',
+    'Política e Gestão': 'fas fa-landmark',
+    'Geral': 'fas fa-info-circle',
+  }
+  return icons[topic] || 'fas fa-info-circle'
+}
+
+const getSentimentIcon = (sentiment) => {
+  return sentiment === 'Positivo' ? 'fas fa-thumbs-up' : 'fas fa-thumbs-down'
+}
 
 const resetAllFilters = () => {
-  dataStore.startDate = dataStore.minDate;
-  dataStore.endDate = dataStore.maxDate;
-  dataStore.selectedTag = 'Todas';
-  searchTerm.value = '';
-};
+  dataStore.startDate = dataStore.minDate
+  dataStore.endDate = dataStore.maxDate
+  dataStore.selectedTag = 'Todas'
+  searchTerm.value = ''
+  selectedTopic.value = 'Todos'
+  selectedSentiment.value = 'Todos'
+}
 
-const searchedPublications = computed(() => {
-  if (!searchTerm.value) {
-    return dataStore.filteredPublications;
+const enrichedPublications = computed(() => {
+  const filteredByStore = dataStore.filteredPublications
+
+  const enriched = filteredByStore.map(pub => {
+    let mainTopic = 'Geral'
+    let mainSentiment = 'Geral'
+    let highlightComment = null
+
+    const allComments = (pub.comments || []).flatMap(c => [
+      { text: c.text, ...c },
+      ...(c.replies || []).map(r => ({ text: r.text, ...r }))
+    ])
+
+    const allTextClassifiers = [
+      { text: pub.description || '', isDesc: true },
+      ...allComments.map(c => ({ text: c.text || '', isDesc: false, comment: c }))
+    ]
+
+    for (const item of allTextClassifiers) {
+      const topic = getTopicFromText(item.text)
+      const sentiment = getSentiment(item.text)
+
+      if (topic === 'Ameaças e Riscos') mainTopic = 'Ameaças e Riscos'
+      if (mainTopic === 'Geral' && topic !== 'Geral') mainTopic = topic
+
+      if (sentiment === 'Negativo') mainSentiment = 'Negativo'
+      if (mainSentiment === 'Geral' && sentiment === 'Positivo') mainSentiment = 'Positivo'
+
+      if (!item.isDesc && !highlightComment && (sentiment === 'Negativo' || topic === 'Ameaças e Riscos')) {
+        highlightComment = { text: item.text, topic: topic }
+      }
+    }
+
+    return {
+      ...pub,
+      mainTopic,
+      mainSentiment,
+      highlightComment
+    }
+  })
+
+  return enriched.filter(pub => {
+    const topicMatch = selectedTopic.value === 'Todos' || pub.mainTopic === selectedTopic.value
+    const sentimentMatch = selectedSentiment.value === 'Todos' || pub.mainSentiment === selectedSentiment.value
+
+    const lowerSearch = searchTerm.value.toLowerCase()
+    const searchMatch = !searchTerm.value ||
+      (pub.description || '').toLowerCase().includes(lowerSearch) ||
+      `#${pub.publicacao_n}`.includes(lowerSearch)
+
+    return topicMatch && sentimentMatch && searchMatch
+  })
+})
+
+const openVideo = (url) => {
+  if (url) {
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
-  const lowerSearch = searchTerm.value.toLowerCase();
-  return dataStore.filteredPublications.filter(pub =>
-    (pub.description || '').toLowerCase().includes(lowerSearch) ||
-    `#${pub.publicacao_n}`.includes(lowerSearch)
-  );
-});
+}
 
 const openModal = (pub) => {
-  selectedPublication.value = pub;
-  document.body.style.overflow = 'hidden';
-};
+  selectedPublication.value = pub
+  document.body.style.overflow = 'hidden'
+}
 const closeModal = () => {
-  selectedPublication.value = null;
-  document.body.style.overflow = '';
-};
+  selectedPublication.value = null
+  document.body.style.overflow = ''
+}
 </script>
 
 <style scoped>
-/* CSS REATORADO E SIMPLIFICADO.
-  As variáveis :root foram movidas para .dashboard-page
-  para funcionar corretamente dentro de <style scoped>.
-*/
 .dashboard-page {
-  /* Variáveis CSS movidas para cá para escopo */
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
   --text-primary: #2c3e50;
@@ -193,8 +348,7 @@ const closeModal = () => {
   --primary-color: #3498db;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
   --border-radius: 12px;
-
-  padding: 1rem;
+  padding: 1.5rem;
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -202,8 +356,9 @@ const closeModal = () => {
 
 .header-controls {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
   gap: 1rem;
 }
@@ -218,20 +373,16 @@ const closeModal = () => {
 .file-selector {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   background-color: var(--card-bg);
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  width: 100%;
-  justify-content: space-between;
-  box-sizing: border-box;
 }
 
 .file-selector label {
   font-weight: 500;
   color: var(--text-secondary);
-  white-space: nowrap;
 }
 
 .file-selector select {
@@ -239,19 +390,15 @@ const closeModal = () => {
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background-color: #fff;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   text-transform: capitalize;
-  flex-grow: 1;
-  width: 100%;
 }
 
-/* --- BARRA DE FILTRO UNIFICADA (NOVOS ESTILOS) --- */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
-  /* Permite que os itens quebrem a linha em telas menores */
   align-items: center;
   gap: 1rem;
   background-color: #fff;
@@ -274,7 +421,6 @@ const closeModal = () => {
   white-space: nowrap;
 }
 
-/* Estilos unificados para inputs e selects na barra de filtro */
 .filter-group input[type="date"],
 .filter-group select,
 .filter-group .search-input {
@@ -286,7 +432,6 @@ const closeModal = () => {
   background-color: #fff;
   color: var(--text-primary);
   height: 40px;
-  /* Altura fixa para alinhamento */
 }
 
 .filter-group input:disabled,
@@ -295,12 +440,9 @@ const closeModal = () => {
   cursor: not-allowed;
 }
 
-/* Grupo de Pesquisa (principal) */
 .search-group {
   flex-grow: 1;
-  /* Faz a pesquisa ocupar o espaço disponível */
   min-width: 250px;
-  /* Largura mínima antes de quebrar a linha */
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0 0.5rem;
@@ -309,7 +451,6 @@ const closeModal = () => {
 
 .search-group .search-icon {
   color: var(--text-light);
-  padding-left: 0.25rem;
 }
 
 .search-group .search-input {
@@ -324,16 +465,13 @@ const closeModal = () => {
   color: var(--text-light);
 }
 
-/* Grupo de Resultados (à direita) */
 .results-group {
   margin-left: auto;
-  /* Empurra para a direita */
   color: var(--text-secondary);
   font-size: 0.9rem;
   white-space: nowrap;
 }
 
-/* Botão de Reset */
 .reset-btn {
   display: flex;
   align-items: center;
@@ -359,15 +497,11 @@ const closeModal = () => {
   cursor: not-allowed;
 }
 
-/* --- FIM DA BARRA DE FILTRO --- */
-
-
 .dashboard-content {
   position: relative;
   min-height: 400px;
 }
 
-/* Estados de Feedback (Loading, Erro, Sem Dados) */
 .feedback-state {
   display: flex;
   flex-direction: column;
@@ -388,28 +522,15 @@ const closeModal = () => {
   background-color: rgba(248, 249, 250, 0.85);
   backdrop-filter: blur(2px);
   border-radius: var(--border-radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .error-overlay {
   background-color: rgba(255, 235, 235, 0.9);
-}
-
-.error-overlay p {
   color: #c0392b;
-  font-weight: 500;
-}
-
-.feedback-state pre {
-  background-color: #fdd;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-top: 1rem;
-  font-size: 0.8rem;
-  width: 100%;
-  max-width: 90vw;
-  overflow-x: auto;
-  text-align: left;
-  box-sizing: border-box;
 }
 
 .no-data-state {
@@ -434,7 +555,6 @@ const closeModal = () => {
   }
 }
 
-/* --- Lista de Cards --- */
 .pub-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -449,8 +569,7 @@ const closeModal = () => {
   display: flex;
   flex-direction: column;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  gap: 0.75rem;
-  /* Espaçamento interno */
+  gap: 1rem;
 }
 
 .pub-card:hover {
@@ -482,22 +601,7 @@ const closeModal = () => {
   font-size: 0.95rem;
   color: var(--text-secondary);
   line-height: 1.5;
-  flex-grow: 1;
   margin: 0;
-}
-
-.pub-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.pub-stats span {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
 }
 
 .btn-details {
@@ -511,13 +615,92 @@ const closeModal = () => {
   cursor: pointer;
   text-align: center;
   transition: background-color 0.2s ease;
+  margin-top: auto;
 }
 
 .btn-details:hover {
   background-color: #2980b9;
 }
 
-/* --- Modal --- */
+.pub-intelligence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.topic-tag,
+.sentiment-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.topic-tag {
+  background-color: #ccc;
+  color: #fff;
+}
+
+.topic-tag i {
+  font-size: 0.8em;
+}
+
+.sentiment-tag {
+  background-color: #f8f9fa;
+  border: 1px solid var(--border-color);
+}
+
+.sentiment-tag i {
+  font-size: 0.9em;
+}
+
+.pub-featured-comment {
+  padding: 0.75rem 1rem;
+  padding-left: 0.75rem;
+  border-left: 4px solid var(--border-color);
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.pub-featured-comment.placeholder {
+  opacity: 0.7;
+}
+
+.pub-featured-comment i {
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.pub-featured-comment p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.pub-featured-comment[data-topic="Ameaças e Riscos"] {
+  border-left-color: var(--danger-color, #c0392b);
+  background-color: #fff5f5;
+}
+
+.pub-featured-comment[data-topic="Ameaças e Riscos"] i {
+  color: var(--danger-color, #c0392b);
+}
+
+.pub-featured-comment[data-topic="Ameaças e Riscos"] p {
+  color: #c0392b;
+  font-style: normal;
+  font-weight: 500;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -574,18 +757,80 @@ const closeModal = () => {
   line-height: 1.6;
 }
 
-.modal-body p {
+.video-preview-container {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  /* Proporção 16:9 */
+  background-color: #000;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.3);
+  transition: background-color 0.2s ease;
+}
+
+.video-preview-container:hover .video-overlay {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.play-icon {
+  font-size: 4rem;
+  color: rgba(255, 255, 255, 0.8);
+  transition: transform 0.2s ease;
+}
+
+.video-preview-container:hover .play-icon {
+  transform: scale(1.1);
+}
+
+.tiktok-logo {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  width: 2rem;
+  height: 2rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+
+.modal-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.25rem;
+}
+
+.modal-description {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
   margin-bottom: 1rem;
 }
 
-.modal-body a {
-  color: var(--primary-color);
-  text-decoration: none;
-  word-break: break-all;
+.modal-description p {
+  margin: 0;
+  margin-top: 0.75rem;
 }
 
-.modal-body a:hover {
-  text-decoration: underline;
+.modal-music {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
 }
 
 .modal-stats {
@@ -596,7 +841,6 @@ const closeModal = () => {
   background-color: #f8f9fa;
   border-radius: 8px;
   margin-bottom: 1rem;
-  color: var(--text-primary);
 }
 
 .modal-stats span {
@@ -623,18 +867,22 @@ const closeModal = () => {
 }
 
 .comment-list {
-  max-height: 200px;
-  /* Diminuído */
+  max-height: 300px;
   overflow-y: auto;
   border-top: 1px solid var(--border-color);
   margin-top: 1rem;
   padding-top: 1rem;
+  padding-right: 0.5rem;
 }
 
 .comment-item {
   border-bottom: 1px solid #f0f0f0;
   padding-bottom: 1rem;
   margin-bottom: 1rem;
+}
+
+.comment-item:last-child {
+  border-bottom: none;
 }
 
 .comment-item p {
@@ -649,52 +897,38 @@ const closeModal = () => {
   color: var(--text-secondary);
 }
 
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.comment-tags {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.topic-tag.small,
+.sentiment-tag.small {
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+  gap: 0.25rem;
+}
+
 .comment-replies {
   margin-left: 1.5rem;
   border-left: 3px solid #f0f0f0;
   padding-left: 1rem;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
 }
 
 .reply-item {
-  margin-top: 0.5rem;
+  margin-top: 1rem;
 }
 
-/* Botão TikTok (Sem alteração) */
-.btn-tiktok {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  background-color: #000000;
-  color: #ffffff;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background-color 0.2s ease;
-  margin-bottom: 1.5rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.btn-tiktok:hover {
-  background-color: #2a2a2a;
-}
-
-.btn-tiktok .tiktok-icon {
-  width: 1.1em;
-  height: 1.1em;
-}
-
-
-/* --- Media Queries --- */
 @media (max-width: 768px) {
-
-  /* Em telas pequenas, força os grupos de filtro (exceto pesquisa) a terem largura total */
   .filter-group:not(.search-group) {
     width: 100%;
   }
@@ -704,11 +938,9 @@ const closeModal = () => {
     width: 100%;
   }
 
-  /* Empurra o reset e a contagem para a próxima linha */
   .results-group {
     margin-left: 0;
     order: 98;
-    /* Ordem do flex */
   }
 
   .reset-group {
@@ -729,8 +961,6 @@ const closeModal = () => {
 
   .header-controls {
     flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
   }
 
   .main-title {
@@ -747,19 +977,17 @@ const closeModal = () => {
   }
 
   .pub-list {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   }
 
   .modal-body {
     padding: 2rem;
   }
+}
 
-  .modal-stats span {
-    font-size: 0.95rem;
-  }
-
-  .comment-replies {
-    margin-left: 2rem;
+@media (min-width: 1200px) {
+  .pub-list {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 </style>

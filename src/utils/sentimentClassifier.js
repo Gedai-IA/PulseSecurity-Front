@@ -1,6 +1,7 @@
-/* src/utils/emotionClassifier.js */
-export const EMOTION_CONFIG = {
-  Alegria: {
+/* src/utils/sentimentClassifier.js */
+
+export const SENTIMENT_CONFIG = {
+  Positivo: {
     color: '#2ecc71',
     keywords: [
       'gostei',
@@ -34,9 +35,10 @@ export const EMOTION_CONFIG = {
       'raça',
       'campeão',
       'vencer',
+      'ganhamos',
     ],
   },
-  Raiva: {
+  Negativo: {
     color: '#e74c3c',
     keywords: [
       'correram',
@@ -68,53 +70,31 @@ export const EMOTION_CONFIG = {
       'ferido',
       'tumulto',
       'confusão',
-      'bomba',
-      'polícia',
       'invasão',
       'guerra',
-    ],
-  },
-  Frustração: {
-    color: '#9b59b6',
-    keywords: [
-      'decepção',
-      'absurdo',
-      'paciência',
-      'desisto',
-      'difícil',
-      'complicado',
-      'não aguento mais',
-      'de novo',
-      'sempre a mesma coisa',
-      'que raiva',
-    ],
-  },
-  Ansiedade: {
-    color: '#e67e22',
-    keywords: [
-      'esperando',
-      'ansioso',
-      'cadê',
-      'demora',
-      'logo',
-      'será que',
-      'medo',
-      'temer',
-      'cuidado',
+      'perdemos',
+      'lixos',
     ],
   },
 }
 
-export const allEmotions = ['Alegria', 'Raiva', 'Frustração', 'Ansiedade']
+export const allSentiments = ['Positivo', 'Negativo']
 
-export const getEmotion = (text) => {
-  if (!text) return 'Geral' // Alterado de 'Neutro' para 'Geral' para consistência
+export const getSentiment = (text) => {
+  if (!text) return 'Neutro'
   const lowerText = text.toLowerCase()
 
-  for (const [emotion, { keywords }] of Object.entries(EMOTION_CONFIG)) {
-    if (keywords.some((keyword) => lowerText.includes(keyword))) {
-      return emotion
+  for (const keyword of SENTIMENT_CONFIG.Negativo.keywords) {
+    if (lowerText.includes(keyword)) {
+      return 'Negativo'
     }
   }
-  return 'Geral' // Alterado de 'Neutro' para 'Geral'
+
+  for (const keyword of SENTIMENT_CONFIG.Positivo.keywords) {
+    if (lowerText.includes(keyword)) {
+      return 'Positivo'
+    }
+  }
+
+  return 'Neutro'
 }
