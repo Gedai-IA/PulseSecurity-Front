@@ -86,50 +86,22 @@ import { ref, onMounted, computed } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
 import { Line, Bar } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Filler } from 'chart.js';
+import { getTopicFromText, TOPIC_CONFIG } from '@/utils/topicClassifier.js';
+import { getEmotion, EMOTION_CONFIG as BASE_EMOTION_CONFIG, allEmotions as allBaseEmotions } from '@/utils/emotionClassifier.js';
+import { stopwords } from '@/utils/stopwords.js';
 
 ChartJS.register(Title, Tooltip, Legend, PointElement, LineElement, BarElement, CategoryScale, LinearScale, Filler);
 
 const dataStore = useDataStore();
 
-const TOPIC_CONFIG = {
-  'Confronto e Rivalidade': { color: '#e57373', keywords: ['correram', 'guerra', 'ataque', 'bater', 'briga', 'luta', 'vingança', 'mancha'] },
-  'Apoio e União': { color: '#64b5f6', keywords: ['unidos', 'sempre', 'irmão', 'tmj', 'apoio', 'torcida', 'respeito', 'corinthians', 'gaviões'] },
-  'Organização e Eventos': { color: '#ffb74d', keywords: ['jogo', 'grupo', 'evento', 'final', 'campeonato', 'paulista', 'estádio'] },
-  'Geral': { color: '#4db6ac', keywords: [] }
-};
-
-const EMOTION_CONFIG = {
-  Alegria: { color: '#2ecc71', keywords: ['gostei', 'legal', 'tmj', 'parabéns', 'kkkkk', 'unidos', 'sempre', 'dominamos', 'vai corinthians', '🦅', '👊🏼'] },
-  Raiva: { color: '#e74c3c', keywords: ['correram', 'vergonha', 'ridículo', 'lixo', 'pior', 'odeio', 'tomaram'] },
-  Frustração: { color: '#9b59b6', keywords: ['vingança', 'decepção', 'absurdo', '...'] },
-  Neutro: { color: '#95a5a6', keywords: [] }
-};
-
 const allTopics = ref(Object.keys(TOPIC_CONFIG));
-const allEmotions = ref(Object.keys(EMOTION_CONFIG));
 const selectedTopicForWordCloud = ref(allTopics.value[0]);
 
-const getTopicFromText = (text) => {
-  if (!text) return 'Geral';
-  const lowerText = text.toLowerCase();
-  for (const [topic, { keywords }] of Object.entries(TOPIC_CONFIG)) {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      return topic;
-    }
-  }
-  return 'Geral';
+const TOPICS_EMOTION_CONFIG = {
+  ...BASE_EMOTION_CONFIG,
+  'Neutro': { color: '#95a5a6' }
 };
-
-const getEmotionFromText = (text) => {
-  if (!text) return 'Neutro';
-  const lowerText = text.toLowerCase();
-  for (const [emotion, { keywords }] of Object.entries(EMOTION_CONFIG)) {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      return emotion;
-    }
-  }
-  return 'Neutro';
-};
+const allEmotions = ref([...allBaseEmotions, 'Neutro']);
 
 const processedData = computed(() => {
   return dataStore.filteredPublications.flatMap(post => {
@@ -141,7 +113,7 @@ const processedData = computed(() => {
       date: date.toISOString().split('T')[0],
       text: `${post.description || ''} ${comment.text || ''}`,
       topic: getTopicFromText(`${post.description || ''} ${comment.text || ''}`),
-      emotion: getEmotionFromText(comment.text || ''),
+      emotion: getEmotion(comment.text || ''),
     }));
   });
 });
@@ -196,13 +168,12 @@ const emotionsByTopicData = computed(() => {
     datasets: allEmotions.value.map(emotion => ({
       label: emotion,
       data: allTopics.value.map(topic => data[topic][emotion]),
-      backgroundColor: EMOTION_CONFIG[emotion].color
+      backgroundColor: TOPICS_EMOTION_CONFIG[emotion].color
     }))
   };
 });
 
 const wordCloudData = computed(() => {
-  const stopwords = new Set(['de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'é', 'com', 'não', 'uma', 'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao', 'ser', 'ter']);
   const wordCounts = {};
   const filteredText = processedData.value
     .filter(p => p.topic === selectedTopicForWordCloud.value)

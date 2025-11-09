@@ -101,59 +101,20 @@
 </template>
 
 <script setup>
-// Imports atualizados
 import { computed, onMounted, ref } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
 import { Bar, Line, Bubble, Doughnut } from 'vue-chartjs';
-// Imports de ChartJS (adicionado BubbleController)
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BubbleController } from 'chart.js';
-// Import para interatividade do gráfico
 import { getElementAtEvent } from 'vue-chartjs';
+import { EMOTION_CONFIG, allEmotions, getEmotion } from '@/utils/emotionClassifier.js';
 
-// Registra todos os componentes necessários
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BubbleController);
 
 const dataStore = useDataStore();
 
-// --- 1. Refs para Interatividade (NOVOS) ---
 const doughnutChartRef = ref(null);
 const selectedEmotion = ref(null);
 
-// --- 2. Lógica de Emoções (COPIADA DA TELA 'emocoes.vue') ---
-const EMOTION_CONFIG = {
-  Alegria: {
-    color: '#2ecc71',
-    keywords: ['gostei', 'legal', 'tmj', 'parabéns', 'kkkkk', 'unidos', 'sempre', 'dominamos', 'vai corinthians', '🦅', '👊🏼', '⚫⚪', 'respeito', 'obrigado', 'show', 'top', 'massa', 'boa', 'isso', 'vamoo', 'lindo', 'família', 'melhor', 'meu amor', 'é nós', 'parabens', 'orgulho', 'gigante', 'raça', 'campeão', 'vencer']
-  },
-  Raiva: {
-    color: '#e74c3c',
-    keywords: ['correram', 'vergonha', 'ridículo', 'lixo', 'pior', 'odeio', 'tomaram', 'lamentável', 'piada', 'fdp', 'lixo', 'time pequeno', 'some', 'fraco', 'covardes', 'merda', 'vtnc', 'humilhação', 'acabou', 'fora', 'pipoqueiro', 'incompetente', 'desgraça', 'violência', 'briga', 'morte', 'ferido', 'tumulto', 'confusão', 'bomba', 'polícia', 'invasão', 'guerra']
-  },
-  Frustração: {
-    color: '#9b59b6',
-    keywords: ['decepção', 'absurdo', 'paciência', 'desisto', 'difícil', 'complicado', 'não aguento mais', 'de novo', 'sempre a mesma coisa', 'que raiva']
-  },
-  Ansiedade: {
-    color: '#e67e22',
-    keywords: ['esperando', 'ansioso', 'cadê', 'demora', 'logo', 'será que', 'medo', 'temer', 'cuidado']
-  }
-};
-const allEmotions = ['Alegria', 'Raiva', 'Frustração', 'Ansiedade'];
-
-const getEmotion = (text) => {
-  if (!text) return 'Neutro';
-  const lowerText = text.toLowerCase();
-  for (const [emotion, { keywords }] of Object.entries(EMOTION_CONFIG)) {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      return emotion;
-    }
-  }
-  return 'Neutro';
-};
-
-// --- 3. Dados Processados ---
-
-// Helper atualizado para incluir data e emoção, descartando neutros
 const allCommentsWithEmotion = computed(() => {
   return dataStore.filteredPublications.flatMap(post => {
     const allPostComments = (post.comments || []).flatMap(c => [c, ...(c.replies || [])]);
@@ -164,7 +125,7 @@ const allCommentsWithEmotion = computed(() => {
       postDate: date,
       emotion: getEmotion(comment.text || ''),
     }));
-  }).filter(item => item.emotion !== 'Neutro'); // <-- DESCARTE DE NEUTRO
+  }).filter(item => item.emotion !== 'Neutro');
 });
 
 
@@ -176,15 +137,13 @@ onMounted(() => {
 
 const resetAllFilters = () => {
   dataStore.resetFilters();
-  resetEmotionFilter(); // <-- Adicionado
+  resetEmotionFilter();
 };
 
-// NOVO: Limpa o filtro de emoção
 const resetEmotionFilter = () => {
   selectedEmotion.value = null;
 };
 
-// NOVO: Handler de clique na Pizza
 const handleDoughnutClick = (event) => {
   const chart = doughnutChartRef.value?.chart;
   if (!chart) return;
@@ -196,9 +155,6 @@ const handleDoughnutClick = (event) => {
   }
 };
 
-// --- 4. Computeds dos Gráficos ---
-
-// 'sentimentData' (Gráfico de Pizza) - LÓGICA ATUALIZADA
 const sentimentData = computed(() => {
   const counts = { Alegria: 0, Raiva: 0, Frustração: 0, Ansiedade: 0 };
   allCommentsWithEmotion.value.forEach(item => {
@@ -215,7 +171,6 @@ const sentimentData = computed(() => {
   };
 });
 
-// Dados BASE para o Gráfico de Linha de Emoções (NOVO)
 const emotionsOverTimeData = computed(() => {
   const dataByDate = {};
   allCommentsWithEmotion.value.forEach(item => {
@@ -239,10 +194,9 @@ const emotionsOverTimeData = computed(() => {
   };
 });
 
-// Dados FINAIS para o Gráfico de Linha de Emoções (filtrado) (NOVO)
 const finalEmotionsOverTimeData = computed(() => {
   if (!selectedEmotion.value) {
-    return emotionsOverTimeData.value; // Mostra tudo
+    return emotionsOverTimeData.value;
   }
   return {
     ...emotionsOverTimeData.value,
@@ -252,7 +206,6 @@ const finalEmotionsOverTimeData = computed(() => {
   };
 });
 
-// 'wordFrequencyData' (Sem alteração)
 const wordFrequencyData = computed(() => {
   const stopwords = new Set(['de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'é', 'com', 'não', 'uma', 'os', 'no', 'se', 'na', 'por', 'mais', 'as', 'dos', 'como', 'mas', 'foi', 'ao', 'ser', 'ter', 'ele', 'ela', 'nós', 'vc', 'vcs', 'tá']);
   const wordCounts = {};
@@ -272,8 +225,6 @@ const wordFrequencyData = computed(() => {
   };
 });
 
-// 'totalEngagementData' (REMOVIDO DOS GRÁFICOS, MAS MANTIDO CASO VOCÊ QUEIRA USAR DEPOIS)
-// (O gráfico foi substituído pela linha do tempo de emoções)
 const totalEngagementData = computed(() => {
   const totals = dataStore.filteredPublications.reduce((acc, post) => {
     acc.views += Number(post.views) || 0;
@@ -290,7 +241,6 @@ const totalEngagementData = computed(() => {
   };
 });
 
-// 'postsOverTimeData' (Sem alteração)
 const postsOverTimeData = computed(() => {
   const countsByDate = {};
   dataStore.filteredPublications.forEach(post => {
@@ -309,7 +259,6 @@ const postsOverTimeData = computed(() => {
   };
 });
 
-// 'topTagsData' (Sem alteração)
 const topTagsData = computed(() => {
   const tagCounts = {};
   dataStore.filteredPublications.flatMap(p => p.tags || []).forEach(tag => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
@@ -321,16 +270,14 @@ const topTagsData = computed(() => {
   };
 });
 
-// 'bubbleChartPosts' (Sem alteração)
 const bubbleChartPosts = computed(() => dataStore.filteredPublications);
 
-// 'engagementCorrelationData' (Sem alteração - adicionei 'link' para o clique)
 const engagementCorrelationData = computed(() => {
   const data = bubbleChartPosts.value.map(post => ({
     x: Number(post.views) || 0,
     y: Number(post.likes) || 0,
     r: (Number(post.comments_count) || 0) * 0.5 + 5,
-    link: post.url // Adiciona o link para o clique
+    link: post.url
   }));
 
   return {
@@ -338,24 +285,18 @@ const engagementCorrelationData = computed(() => {
   };
 });
 
-// 'handleChartClick' (Atualizado para pegar 'link' do dataPoint)
 const handleChartClick = (event, elements, posts) => {
   if (elements.length === 0) return;
   const dataIndex = elements[0].index;
-  // 'posts' é passado pelo 'bubbleChartOptions'
   const post = posts[dataIndex];
   if (post && post.link) {
     window.open(post.link, '_blank', 'noopener,noreferrer');
   }
 };
 
-
-// --- 5. Opções dos Gráficos ---
-
 const baseChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#333', titleFont: { size: 14 }, bodyFont: { size: 12 }, padding: 10, cornerRadius: 6 } }, scales: { x: { grid: { display: false }, ticks: { color: '#555' } }, y: { beginAtZero: true, grid: { color: '#eee' }, ticks: { color: '#555' } } } };
 const chartOptions = { ...baseChartOptions };
 
-// Opções da Pizza (Doughnut) - Atualizado com Tooltip de Porcentagem
 const doughnutOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -378,7 +319,6 @@ const doughnutOptions = {
 
 const horizontalBarOptions = { ...baseChartOptions, indexAxis: 'y', scales: { x: { grid: { color: '#eee' }, ticks: { color: '#555' } }, y: { grid: { display: false }, ticks: { color: '#555' } } } };
 
-// Opções da Bolha (Bubble) - Atualizado com 'onClick'
 const bubbleChartOptions = computed(() => ({
   ...baseChartOptions,
   plugins: { ...baseChartOptions.plugins, legend: { display: true, position: 'top' } },
@@ -390,7 +330,6 @@ const bubbleChartOptions = computed(() => ({
     }
   },
   onClick: (event, elements) => {
-    // Passa os posts corretos para o handler
     handleChartClick(event, elements, bubbleChartPosts.value);
   }
 }));

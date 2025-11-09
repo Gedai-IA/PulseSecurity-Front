@@ -13,7 +13,6 @@
       </div>
     </header>
 
-    <!-- Barra de Filtros (sem alterações) -->
     <div class="filter-bar">
       <div class="filter-group">
         <label for="start-date">Data Início:</label>
@@ -43,7 +42,6 @@
 
     <main class="dashboard-content">
 
-      <!-- Estados de Feedback -->
       <div v-if="dataStore.loading" class="feedback-state loading-overlay">
         <div class="spinner"></div>
         <p>Analisando dados...</p>
@@ -53,10 +51,8 @@
         <pre>{{ dataStore.error }}</pre>
       </div>
 
-      <!-- Conteúdo Principal -->
       <div v-if="!dataStore.error && dataStore.filteredPublications.length > 0" class="dashboard-summary">
 
-        <!-- KPIs (Cards de Métricas) - VISUAL APRIMORADO -->
         <div class="kpi-grid">
           <div class="kpi-card">
             <i class="fas fa-file-alt kpi-icon"></i>
@@ -102,7 +98,6 @@
           </div>
         </div>
 
-        <!-- Linha de Gráficos Top 5 -->
         <div class="charts-row">
           <div class="chart-card">
             <h2 class="chart-title">Top 5 (Mais Curtidas)</h2>
@@ -121,7 +116,6 @@
 
       </div>
 
-      <!-- Estado "Sem Dados" -->
       <div v-else-if="!dataStore.loading && !dataStore.error" class="feedback-state no-data-state">
         <p>Nenhum dado encontrado para os filtros selecionados.</p>
       </div>
@@ -133,15 +127,14 @@
 import { computed, onMounted, ref } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
 import { Bar } from 'vue-chartjs';
-// Importa o helper para pegar o elemento clicado
 import { getElementAtEvent } from 'vue-chartjs';
 import { Chart as ChartJS, Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale } from 'chart.js';
+import { formatNumber } from '@/utils/formatters.js';
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 const dataStore = useDataStore();
 
-// Refs para os gráficos (necessário para o getElementAtEvent)
 const topLikesChartRef = ref(null);
 const topCommentsChartRef = ref(null);
 const topViewsChartRef = ref(null);
@@ -153,31 +146,20 @@ onMounted(() => {
 });
 
 const resetAllFilters = () => {
-  // Assume que dataStore tem essa função
   if (typeof dataStore.resetFilters === 'function') {
     dataStore.resetFilters();
   } else {
-    // Fallback caso a função não exista no store
     dataStore.startDate = dataStore.minDate;
     dataStore.endDate = dataStore.maxDate;
     dataStore.selectedTag = 'Todas';
   }
 };
 
-// --- Funções Auxiliares ---
 const safeAvg = (total, count) => {
   if (!count || count === 0) return 0;
   return (total / count);
 };
 
-const formatNumber = (num) => {
-  const n = Number(num) || 0; // Garante que é número
-  if (n < 1000) return n.toFixed(0);
-  if (n < 1000000) return (n / 1000).toFixed(1).replace('.0', '') + 'k';
-  return (n / 1000000).toFixed(1).replace('.0', '') + 'M';
-};
-
-// --- Computeds para KPIs ---
 const summaryStats = computed(() => {
   const pubs = dataStore.filteredPublications;
   const count = pubs.length;
@@ -195,7 +177,6 @@ const summaryStats = computed(() => {
     acc.comments_count += Number(post.comments_count) || 0;
     acc.shares += Number(post.shares) || 0;
     acc.bookmarks += Number(post.bookmarks) || 0;
-    // Soma comentários + replies para total real
     acc.totalComments += (post.comments || []).reduce((commentCount, c) => {
       return commentCount + 1 + (c.replies || []).length;
     }, 0);
@@ -214,71 +195,56 @@ const summaryStats = computed(() => {
   };
 });
 
-// --- Computeds para Gráficos Top 5 ---
-
-// Função genérica para pegar os Top posts por uma métrica
 const getTopPosts = (metric) => {
-  // Cria cópia e ordena
   return [...dataStore.filteredPublications]
     .sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0))
-    .slice(0, 5) // Pega os 5 maiores
-    .reverse(); // Inverte para o maior ficar no topo do gráfico
+    .slice(0, 5)
+    .reverse();
 };
 
-// Função para formatar dados para o gráfico de barras horizontal
 const formatChartData = (posts, metric, color) => {
   return {
-    // LABEL MAIS LIMPO: Apenas o #ID
     labels: posts.map(p => `#${p.publicacao_n}`),
     datasets: [{
-      label: `Total`, // Tooltip mostrará "Total: XXX"
+      label: `Total`,
       data: posts.map(p => Number(p[metric]) || 0),
       backgroundColor: color,
       borderRadius: 4,
-      // Guarda a descrição completa para o tooltip
       postDescriptions: posts.map(p => p.description || 'Sem descrição')
     }]
   };
 };
 
-// Computeds específicos para cada gráfico
 const topLikesPosts = computed(() => getTopPosts('likes'));
-const topLikesData = computed(() => formatChartData(topLikesPosts.value, 'likes', '#27ae60')); // Verde
+const topLikesData = computed(() => formatChartData(topLikesPosts.value, 'likes', '#27ae60'));
 
 const topCommentsPosts = computed(() => getTopPosts('comments_count'));
-const topCommentsData = computed(() => formatChartData(topCommentsPosts.value, 'comments_count', '#2980b9')); // Azul
+const topCommentsData = computed(() => formatChartData(topCommentsPosts.value, 'comments_count', '#2980b9'));
 
 const topViewsPosts = computed(() => getTopPosts('views'));
-const topViewsData = computed(() => formatChartData(topViewsPosts.value, 'views', '#f39c12')); // Laranja
-
-// --- Handler de Clique nos Gráficos ---
+const topViewsData = computed(() => formatChartData(topViewsPosts.value, 'views', '#f39c12'));
 
 const handleChartClick = (event, chartRef, posts) => {
-  const chart = chartRef.value?.chart; // Acessa o gráfico pela ref
+  const chart = chartRef.value?.chart;
   if (!chart) return;
 
-  const elements = getElementAtEvent(chart, event); // Pega o elemento clicado
+  const elements = getElementAtEvent(chart, event);
   if (elements.length === 0) return;
 
   const { index } = elements[0];
-  const post = posts[index]; // Pega o post correspondente pelo índice
+  const post = posts[index];
 
-  // CORREÇÃO: Usa 'url' em vez de 'link'
   if (post && post.url) {
     window.open(post.url, '_blank', 'noopener,noreferrer');
   } else {
     console.warn('URL não encontrado para a publicação:', post);
-    // Poderia mostrar uma mensagem para o usuário aqui
   }
 };
 
-// --- Opções dos Gráficos ---
-
-// Opções base para os gráficos de barras horizontais
 const createBarOptions = (postsRef, chartRef) => ({
   responsive: true,
   maintainAspectRatio: false,
-  indexAxis: 'y', // Barras horizontais
+  indexAxis: 'y',
   plugins: {
     legend: { display: false },
     tooltip: {
@@ -287,16 +253,15 @@ const createBarOptions = (postsRef, chartRef) => ({
       bodyFont: { size: 12 },
       padding: 10,
       cornerRadius: 6,
-      // Personaliza o tooltip para mostrar a descrição
       callbacks: {
         title: function (tooltipItems) {
           const index = tooltipItems[0].dataIndex;
           const label = tooltipItems[0].chart.data.labels[index];
           const description = tooltipItems[0].dataset.postDescriptions[index];
-          return `${label}: ${description.substring(0, 50)}...`; // Mostra ID e Descrição no título
+          return `${label}: ${description.substring(0, 50)}...`;
         },
         label: function (context) {
-          return ` ${context.dataset.label}: ${formatNumber(context.parsed.x)}`; // Mostra "Total: XXXk"
+          return ` ${context.dataset.label}: ${formatNumber(context.parsed.x)}`;
         }
       }
     }
@@ -306,45 +271,36 @@ const createBarOptions = (postsRef, chartRef) => ({
       grid: { color: '#eee' },
       ticks: {
         color: '#555',
-        // Formata os números no eixo X
         callback: function (value) { return formatNumber(value); }
       }
     },
     y: { grid: { display: false }, ticks: { color: '#555' } }
   },
-  // Muda o cursor para indicar clicabilidade
   onHover: (event, chartElement) => {
     const canvas = event.native?.target;
     if (canvas) canvas.style.cursor = chartElement[0] ? 'pointer' : 'default';
   },
-  // Define o onClick para chamar o handler genérico
   onClick: (event) => handleChartClick(event, chartRef, postsRef.value)
 });
 
-// Opções específicas passando a ref e os posts corretos
 const topLikesOptions = computed(() => createBarOptions(topLikesPosts, topLikesChartRef));
 const topCommentsOptions = computed(() => createBarOptions(topCommentsPosts, topCommentsChartRef));
 const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsChartRef));
-
 </script>
 
+
 <style scoped>
-/* ESTILOS REFINADOS */
 .dashboard-page {
-  /* Variáveis CSS */
   --primary-bg: #f8f9fa;
   --card-bg: #ffffff;
   --text-primary: #2c3e50;
   --text-secondary: #555;
   --border-color: #e0e0e0;
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  /* Sombra mais suave */
   --border-radius: 10px;
-  /* Bordas levemente mais suaves */
   --primary-color: #3498db;
 
   padding: 1.5rem;
-  /* Aumenta padding geral */
   background-color: var(--primary-bg);
   min-height: 100vh;
   font-family: 'Inter', sans-serif;
@@ -353,7 +309,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 .header-controls {
   display: flex;
   flex-wrap: wrap;
-  /* Permite quebrar linha em telas menores */
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1.5rem;
@@ -375,8 +330,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  /* width: 100%; */
-  /* Removido para permitir ajuste automático */
   box-sizing: border-box;
 }
 
@@ -389,7 +342,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 
 .file-selector select {
   padding: .5rem 0.75rem;
-  /* Padding ligeiramente menor */
   border-radius: 6px;
   border: 1px solid var(--border-color);
   background-color: #fff;
@@ -398,22 +350,18 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   cursor: pointer;
   text-transform: capitalize;
   min-width: 180px;
-  /* Largura mínima */
 }
 
-/* Barra de Filtros */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
-  /* Espaçamento padrão */
   background-color: #fff;
   padding: 1rem 1.5rem;
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   margin-bottom: 2rem;
-  /* Mais espaço abaixo */
 }
 
 .filter-group {
@@ -439,7 +387,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   background-color: #fff;
   color: var(--text-primary);
   height: 38px;
-  /* Altura padrão */
 }
 
 .filter-group input:disabled,
@@ -450,14 +397,12 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 
 .reset-group {
   margin-left: auto;
-  /* Empurra para a direita */
 }
 
 .reset-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  /* Menor gap */
   padding: 0.5rem 1rem;
   background-color: #f0f0f0;
   border: 1px solid var(--border-color);
@@ -474,7 +419,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   font-size: 0.8em;
 }
 
-/* Ícone menor */
 .reset-btn:hover:not(:disabled) {
   background-color: #e0e0e0;
 }
@@ -484,7 +428,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   cursor: not-allowed;
 }
 
-/* Feedback States */
 .dashboard-content {
   position: relative;
   min-height: 300px;
@@ -556,11 +499,9 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   }
 }
 
-/* Grid de KPIs - VISUAL MELHORADO */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  /* Responsivo */
   gap: 1rem;
   margin-bottom: 2rem;
 }
@@ -571,11 +512,8 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   display: flex;
-  /* Usa Flexbox */
   align-items: center;
-  /* Alinha verticalmente */
   gap: 1rem;
-  /* Espaço entre ícone e texto */
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -586,39 +524,30 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 
 .kpi-icon {
   font-size: 1.8rem;
-  /* Tamanho do ícone */
   color: var(--primary-color);
   opacity: 0.7;
   flex-shrink: 0;
-  /* Não encolhe */
 }
 
 .kpi-card div {
-  /* Container para título e valor */
   text-align: left;
 }
 
 .kpi-title {
-  /* Renomeado de h3 para .kpi-title */
   font-size: 0.85rem;
   font-weight: 500;
-  /* Mais leve */
   color: var(--text-secondary);
   margin: 0 0 0.25rem 0;
-  /* Menos espaço abaixo */
 }
 
 .kpi-value {
-  /* Renomeado de p para .kpi-value */
   font-size: 1.6rem;
-  /* Ligeiramente menor */
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
   line-height: 1.2;
 }
 
-/* Linha de Gráficos */
 .charts-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -631,7 +560,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   height: 400px;
-  /* Altura padrão reduzida */
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.2s ease;
@@ -643,10 +571,8 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
 
 .chart-title {
   font-size: 1.0rem;
-  /* Título menor */
   font-weight: 600;
   margin-bottom: 1rem;
-  /* Menos espaço */
   color: var(--text-primary);
   text-align: center;
   margin-top: 0;
@@ -656,9 +582,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   cursor: pointer;
 }
 
-/* Indica que o gráfico é clicável */
-
-/* Media Queries */
 @media (min-width: 768px) {
   .dashboard-page {
     padding: 2rem;
@@ -690,7 +613,6 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
     grid-template-columns: 1fr 1fr;
   }
 
-  /* 2 colunas */
   .chart-card {
     height: 420px;
   }
@@ -700,7 +622,5 @@ const topViewsOptions = computed(() => createBarOptions(topViewsPosts, topViewsC
   .charts-row {
     grid-template-columns: 1fr 1fr 1fr;
   }
-
-  /* 3 colunas */
 }
 </style>

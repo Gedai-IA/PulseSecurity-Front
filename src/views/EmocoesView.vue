@@ -94,70 +94,13 @@ import {
   Chart as ChartJS, Title, Tooltip, Legend, ArcElement, PointElement,
   LineElement, CategoryScale, LinearScale, Filler
 } from 'chart.js';
+import { EMOTION_CONFIG, allEmotions, getEmotion } from '@/utils/emotionClassifier.js';
 
 ChartJS.register(Title, Tooltip, Legend, ArcElement, PointElement, LineElement, CategoryScale, LinearScale, Filler);
 
 const dataStore = useDataStore();
 const doughnutChartRef = ref(null);
-// Renomeado para 'selectedEmotion'
 const selectedEmotion = ref(null);
-
-// --- 1. LÓGICA DE EMOÇÕES (MODIFICADA) ---
-
-// Configuração de emoções, cores e palavras-chave expandidas
-const EMOTION_CONFIG = {
-  Alegria: {
-    color: '#2ecc71', // Verde
-    keywords: [
-      'gostei', 'legal', 'tmj', 'parabéns', 'kkkkk', 'unidos', 'sempre', 'dominamos',
-      'vai corinthians', '🦅', '👊🏼', '⚫⚪', 'respeito', 'obrigado', 'show', 'top',
-      'massa', 'boa', 'isso', 'vamoo', 'lindo', 'família', 'melhor', 'meu amor',
-      'é nós', 'parabens', 'orgulho', 'gigante', 'raça', 'campeão', 'vencer'
-    ]
-  },
-  Raiva: {
-    color: '#e74c3c', // Vermelho
-    keywords: [
-      'correram', 'vergonha', 'ridículo', 'lixo', 'pior', 'odeio', 'tomaram',
-      'lamentável', 'piada', 'fdp', 'lixo', 'time pequeno', 'some', 'fraco',
-      'covardes', 'merda', 'vtnc', 'humilhação', 'acabou', 'fora', 'pipoqueiro',
-      'incompetente', 'desgraça', 'violência', 'briga', 'morte', 'ferido',
-      'tumulto', 'confusão', 'bomba', 'polícia', 'invasão', 'guerra'
-    ]
-  },
-  Frustração: {
-    color: '#9b59b6', // Roxo
-    keywords: [
-      'decepção', 'absurdo', 'paciência', 'desisto', 'difícil', 'complicado',
-      'não aguento mais', 'de novo', 'sempre a mesma coisa', 'que raiva'
-    ]
-  },
-  Ansiedade: {
-    color: '#e67e22', // Laranja
-    keywords: [
-      'esperando', 'ansioso', 'cadê', 'demora', 'logo', 'será que', 'medo', 'temer', 'cuidado'
-    ]
-  }
-};
-
-// Lista de emoções (excluindo Neutro)
-const allEmotions = ['Alegria', 'Raiva', 'Frustração', 'Ansiedade'];
-
-// Função que classifica o texto
-const getEmotion = (text) => {
-  if (!text) return 'Neutro';
-  const lowerText = text.toLowerCase();
-
-  // Itera pela configuração para encontrar a emoção
-  for (const [emotion, { keywords }] of Object.entries(EMOTION_CONFIG)) {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      return emotion;
-    }
-  }
-  return 'Neutro'; // Será descartado
-};
-
-// --- 2. PROCESSAMENTO DE DADOS ---
 
 const processedData = computed(() => {
   return dataStore.filteredPublications.flatMap(post => {
@@ -167,18 +110,15 @@ const processedData = computed(() => {
 
     return allPostComments.map(comment => ({
       date: date.toISOString().split('T')[0],
-      emotion: getEmotion(comment.text || ''), // <-- Classifica a emoção
+      emotion: getEmotion(comment.text || ''),
     }));
   })
-    .filter(item => item.emotion !== 'Neutro'); // <-- DESCARTE DE NEUTRO
+    .filter(item => item.emotion !== 'Neutro');
 });
 
-// --- 3. DADOS PARA OS GRÁFICOS ---
-
-// Dados para o Gráfico de Pizza (Doughnut)
 const emotionDistributionData = computed(() => {
-  const counts = {}; // { Alegria: 0, Raiva: 0, ... }
-  allEmotions.forEach(e => counts[e] = 0); // Inicializa todas as emoções com 0
+  const counts = {};
+  allEmotions.forEach(e => counts[e] = 0);
 
   processedData.value.forEach(item => {
     if (counts[item.emotion] !== undefined) {
@@ -189,24 +129,23 @@ const emotionDistributionData = computed(() => {
   return {
     labels: allEmotions,
     datasets: [{
-      data: allEmotions.map(e => counts[e]), // Pega os valores na ordem correta
-      backgroundColor: allEmotions.map(e => EMOTION_CONFIG[e].color) // Pega as cores
+      data: allEmotions.map(e => counts[e]),
+      backgroundColor: allEmotions.map(e => EMOTION_CONFIG[e].color)
     }]
   };
 });
 
-// Dados para o Gráfico de Linha (Base)
 const emotionOverTimeData = computed(() => {
-  const dataByDate = {}; // { '2023-10-01': { Alegria: 10, Raiva: 5, ... }, ... }
+  const dataByDate = {};
 
   processedData.value.forEach(item => {
     const dateKey = item.date;
     if (!dataByDate[dateKey]) {
-      dataByDate[dateKey] = {}; // Cria o objeto para o dia
-      allEmotions.forEach(e => dataByDate[dateKey][e] = 0); // Inicializa as emoções do dia
+      dataByDate[dateKey] = {};
+      allEmotions.forEach(e => dataByDate[dateKey][e] = 0);
     }
     if (dataByDate[dateKey][item.emotion] !== undefined) {
-      dataByDate[dateKey][item.emotion]++; // Incrementa a emoção específica
+      dataByDate[dateKey][item.emotion]++;
     }
   });
 
@@ -225,12 +164,10 @@ const emotionOverTimeData = computed(() => {
   };
 });
 
-// Dados FINAIS para o Gráfico de Linha (interativo)
 const finalEmotionOverTimeData = computed(() => {
   if (!selectedEmotion.value) {
-    return emotionOverTimeData.value; // Mostra todas as emoções
+    return emotionOverTimeData.value;
   }
-  // Filtra para mostrar apenas a emoção que foi clicada
   return {
     ...emotionOverTimeData.value,
     datasets: emotionOverTimeData.value.datasets.filter(
@@ -239,22 +176,17 @@ const finalEmotionOverTimeData = computed(() => {
   };
 });
 
-
-// --- 4. LÓGICA DO COMPONENTE ---
-
 onMounted(() => {
   if (dataStore.publications.length === 0) {
     dataStore.loadData();
   }
 });
 
-// Reseta os filtros da DataStore e o filtro do gráfico
 const resetAllFilters = () => {
   dataStore.resetFilters();
-  resetEmotionFilter(); // <-- Atualizado
+  resetEmotionFilter();
 };
 
-// Filtra o gráfico de linha ao clicar na pizza
 const handleChartClick = (event) => {
   const chart = doughnutChartRef.value?.chart;
   if (!chart) return;
@@ -262,20 +194,15 @@ const handleChartClick = (event) => {
   const elements = getElementAtEvent(chart, event);
   if (elements.length > 0) {
     const { index } = elements[0];
-    const newEmotion = emotionDistributionData.value.labels[index]; // <-- Atualizado
+    const newEmotion = emotionDistributionData.value.labels[index];
 
-    // Alterna o filtro: se clicar no mesmo, desativa
-    selectedEmotion.value = selectedEmotion.value === newEmotion ? null : newEmotion; // <-- Atualizado
+    selectedEmotion.value = selectedEmotion.value === newEmotion ? null : newEmotion;
   }
 };
 
-// Limpa o filtro do gráfico
 const resetEmotionFilter = () => {
-  selectedEmotion.value = null; // <-- Atualizado
+  selectedEmotion.value = null;
 };
-
-
-// --- 5. OPÇÕES DOS GRÁFICOS (Sem alteração) ---
 
 const baseChartOptions = {
   responsive: true,

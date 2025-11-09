@@ -137,6 +137,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
+import { formatNumber } from '@/utils/formatters.js';
 
 const dataStore = useDataStore();
 const searchTerm = ref('');
@@ -149,8 +150,6 @@ onMounted(() => {
 });
 
 const resetAllFilters = () => {
-  // dataStore.resetFilters(); // Supondo que você tenha esta função no seu store
-  // Se não tiver, apenas reset os valores:
   dataStore.startDate = dataStore.minDate;
   dataStore.endDate = dataStore.maxDate;
   dataStore.selectedTag = 'Todas';
@@ -175,13 +174,6 @@ const openModal = (pub) => {
 const closeModal = () => {
   selectedPublication.value = null;
   document.body.style.overflow = '';
-};
-
-const formatNumber = (numStr) => {
-  const num = Number(numStr) || 0;
-  if (num < 1000) return num.toFixed(0);
-  if (num < 1000000) return (num / 1000).toFixed(1) + 'k';
-  return (num / 1000000).toFixed(1) + 'M';
 };
 </script>
 

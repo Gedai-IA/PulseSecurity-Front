@@ -79,7 +79,7 @@
             </div>
           </div>
           <div class="axis"> <span v-for="tick in axisTicks" :key="tick">{{ tick
-              }}</span>
+          }}</span>
           </div>
           <div class="legend">
             <span class="legend-item"><span class="color-box current"></span> Vol. Período Atual</span>
@@ -97,29 +97,11 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useDataStore } from '@/stores/dataStore';
+import { getTopicFromText, TOPIC_CONFIG } from '@/utils/topicClassifier.js';
+import { formatChange } from '@/utils/formatters.js';
 
 const dataStore = useDataStore();
 const timeMarginInDays = ref(7);
-
-const TOPIC_CONFIG = {
-  'Confronto e Rivalidade': { keywords: ['correram', 'guerra', 'ataque', 'bater', 'briga', 'luta', 'vingança', 'mancha'] },
-  'Apoio e União': { keywords: ['unidos', 'sempre', 'irmão', 'tmj', 'apoio', 'torcida', 'respeito', 'corinthians', 'gaviões'] },
-  'Organização e Eventos': { keywords: ['jogo', 'grupo', 'evento', 'final', 'campeonato', 'paulista', 'estádio'] },
-  'Segurança': { keywords: ['polícia', 'segurança', 'violência', 'roubo', 'morte'] },
-  'Política e Corrupção': { keywords: ['política', 'corrupção', 'vergonha', 'governo', 'pagar'] },
-  'Geral': { keywords: [] }
-};
-
-const getTopicFromText = (text) => {
-  if (!text) return 'Geral';
-  const lowerText = text.toLowerCase();
-  for (const [topic, { keywords }] of Object.entries(TOPIC_CONFIG)) {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      return topic;
-    }
-  }
-  return 'Geral';
-};
 
 const processedDataByDate = computed(() => {
   const publications = dataStore.filteredPublications;
@@ -209,12 +191,6 @@ const getChangeClass = (change) => {
   if (change > 0) return 'positive';
   if (change < 0) return 'negative';
   return 'neutral';
-};
-
-const formatChange = (change) => {
-  if (change === Infinity) return '+∞%';
-  if (isFinite(change)) return `${change > 0 ? '+' : ''}${change.toFixed(0)}%`;
-  return '0%';
 };
 
 const resetAllFilters = () => {
