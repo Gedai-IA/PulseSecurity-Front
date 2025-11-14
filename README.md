@@ -1,73 +1,193 @@
-# pulseSecurity
+# Pulse Security - Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+Frontend Vue.js para análise de sentimento e tópicos em publicações de redes sociais.
 
-## Recommended IDE Setup
+## 🚀 Início Rápido
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+### Pré-requisitos
 
-## Recommended Browser Setup
+- Node.js 20.19.0+ ou 22.12.0+
+- npm ou yarn
+- Backend rodando (veja [INTEGRATION.md](./docs/INTEGRATION.md))
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd) 
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+### Instalação
 
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### Configuração
 
-```sh
+Copie o arquivo de exemplo e configure:
+
+```bash
+cp .env.example .env
+```
+
+Edite o `.env`:
+
+```env
+# URL da API do backend
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+
+# Usar API (true) ou arquivos JSON estáticos (false)
+VITE_USE_API=true
+```
+
+### Executar
+
+```bash
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+Acesse: http://localhost:5173
 
-```sh
-npm run build
+## 📚 Documentação
+
+- [Guia de Integração](./docs/INTEGRATION.md) - Como conectar frontend e backend
+- [Backend Documentation](../scrapping-backend/docs/) - Documentação completa do backend
+
+## 🛠️ Scripts Disponíveis
+
+```bash
+# Desenvolvimento
+npm run dev              # Inicia servidor de desenvolvimento
+
+# Build
+npm run build            # Build para produção
+npm run preview          # Preview do build
+
+# Qualidade de Código
+npm run lint             # Executa ESLint
+npm run format           # Formata código com Prettier
+npm run type-check       # Verifica tipos TypeScript
+
+# Testes
+npm run test:unit        # Testes unitários
+npm run test:e2e         # Testes end-to-end
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+## 🏗️ Estrutura do Projeto
 
-```sh
-npm run test:unit
+```
+src/
+├── components/          # Componentes Vue reutilizáveis
+├── views/              # Páginas/Views
+├── stores/             # Pinia stores (gerenciamento de estado)
+├── services/           # Serviços de API
+│   ├── api.js         # Cliente HTTP
+│   ├── publicationService.js
+│   └── dashboardService.js
+├── config/             # Configurações
+│   └── api.js         # Configuração da API
+├── utils/              # Utilitários
+│   ├── sentimentClassifier.js
+│   ├── emotionClassifier.js
+│   └── topicClassifier.js
+└── router/             # Rotas Vue Router
 ```
 
-### Run End-to-End Tests with [Playwright](https://playwright.dev)
+## 🔌 Integração com Backend
 
-```sh
-# Install browsers for the first run
-npx playwright install
+O frontend pode operar em dois modos:
 
-# When testing on CI, must build the project first
-npm run build
+### Modo API (Padrão)
 
-# Runs the end-to-end tests
-npm run test:e2e
-# Runs the tests only on Chromium
-npm run test:e2e -- --project=chromium
-# Runs the tests of a specific file
-npm run test:e2e -- tests/example.spec.ts
-# Runs the tests in debug mode
-npm run test:e2e -- --debug
+Conecta-se ao backend FastAPI:
+
+```env
+VITE_USE_API=true
+VITE_API_BASE_URL=http://localhost:8000/api/v1
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+### Modo JSON (Legado)
 
-```sh
-npm run lint
+Usa arquivos JSON estáticos:
+
+```env
+VITE_USE_API=false
 ```
+
+## 🚀 Executando Frontend + Backend
+
+### Opção 1: Scripts Automáticos
+
+**Linux/Mac:**
+```bash
+chmod +x start-dev.sh
+./start-dev.sh
+```
+
+**Windows:**
+```powershell
+.\start-dev.ps1
+```
+
+### Opção 2: Terminais Separados
+
+**Terminal 1 - Backend:**
+```bash
+cd ../scrapping-backend
+uv run uvicorn app.main:app --reload
+```
+
+**Terminal 2 - Frontend:**
+```bash
+npm run dev
+```
+
+## 📦 Tecnologias
+
+- **Vue 3** - Framework JavaScript
+- **TypeScript** - Tipagem estática
+- **Pinia** - Gerenciamento de estado
+- **Vue Router** - Roteamento
+- **Chart.js** - Gráficos e visualizações
+- **Vite** - Build tool e dev server
+
+## 🔧 Desenvolvimento
+
+### Adicionar Nova Rota
+
+1. Crie o componente em `src/views/`
+2. Adicione a rota em `src/router/index.ts`
+
+### Adicionar Novo Serviço de API
+
+1. Crie o serviço em `src/services/`
+2. Use o cliente `api` de `src/services/api.js`
+
+### Adicionar Novo Store
+
+1. Crie o store em `src/stores/`
+2. Use `defineStore` do Pinia
+
+## 🐛 Troubleshooting
+
+### Erro: "Failed to fetch"
+
+- Verifique se o backend está rodando
+- Confirme a URL no `.env`
+- Verifique CORS no backend
+
+### Dados não aparecem
+
+- Verifique se os dados foram importados no backend
+- Confirme que `VITE_USE_API=true` no `.env`
+- Verifique o console do navegador para erros
+
+### Porta já em uso
+
+```bash
+# Linux/Mac
+lsof -i :5173
+kill -9 <PID>
+
+# Windows
+netstat -ano | findstr :5173
+taskkill /PID <PID> /F
+```
+
+## 📝 Licença
+
+[Adicione sua licença aqui]

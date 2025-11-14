@@ -1,5 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { publicationService } from '@/services/publicationService'
+import { ApiError } from '@/services/api'
 
 function safeParseDate(dateString, referenceYear = null) {
   try {
@@ -28,6 +30,9 @@ export const useDataStore = defineStore('data', () => {
   const loading = ref(true)
   const error = ref(null)
 
+  // Modo de operação: 'api' ou 'json'
+  const useApi = ref(import.meta.env.VITE_USE_API !== 'false')
+  
   const availableFiles = ref([
     'Mancha Verde vs Gaviões da Fiel.json',
     'sport recife violencia.json',
@@ -46,7 +51,6 @@ export const useDataStore = defineStore('data', () => {
   const maxDate = ref(null)
 
   async function loadData() {
-    if (!selectedFile.value) return
     loading.value = true
     error.value = null
     startDate.value = null
@@ -54,14 +58,68 @@ export const useDataStore = defineStore('data', () => {
     minDate.value = null
     maxDate.value = null
     selectedTag.value = 'Todas'
+    
     try {
-      const response = await fetch(`/json/${selectedFile.value}`)
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-      const data = await response.json()
-      publications.value = Array.isArray(data) ? data : []
+      if (useApi.value) {
+        // Usa a API do backend
+        const response = await publicationService.list({ limit: 1000 })
+        publications.value = response.items || []
+      } else {
+        // Modo legado: carrega de arquivo JSON
+        if (!selectedFile.value) return
+        const response = await fetch(`/json/${selectedFile.value}`)
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        const data = await response.json()
+        publications.value = Array.isArray(data) ? data : []
+      }
     } catch (e) {
-      console.error('Falha ao carregar o arquivo JSON:', e)
-      error.value = e.message
+      console.error('Falha ao carregar dados:', e)
+      if (e instanceof ApiError) {
+        error.value = `Erro da API: ${e.message} (Status: ${e.status})`
+      } else {
+        error.value = e.message || 'Erro ao carregar dados'
+      }
+      publications.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  async function loadDataWithFilters() {
+    loading.value = true
+    error.value = null
+    
+    try {
+      if (!useApi.value) {
+        // No modo JSON, apenas recarrega e aplica filtros localmente
+        await loadData()
+        return
+      }
+      
+      // Usa a API com filtros
+      const filters = {}
+      
+      if (startDate.value) {
+        filters.startDate = startDate.value
+      }
+      
+      if (endDate.value) {
+        filters.endDate = endDate.value
+      }
+      
+      if (selectedTag.value && selectedTag.value !== 'Todas') {
+        filters.tags = [selectedTag.value]
+      }
+      
+      const response = await publicationService.list({ ...filters, limit: 10000 })
+      publications.value = response.items || []
+    } catch (e) {
+      console.error('Falha ao carregar dados com filtros:', e)
+      if (e instanceof ApiError) {
+        error.value = `Erro da API: ${e.message} (Status: ${e.status})`
+      } else {
+        error.value = e.message || 'Erro ao carregar dados'
+      }
       publications.value = []
     } finally {
       loading.value = false
@@ -162,13 +220,22 @@ export const useDataStore = defineStore('data', () => {
     }
   })
 
+  // Watch para recarregar quando filtros mudarem (modo API)
+  watch([startDate, endDate, selectedTag], () => {
+    if (useApi.value && (startDate.value || endDate.value || selectedTag.value !== 'Todas')) {
+      loadDataWithFilters()
+    }
+  })
+
   return {
     publications,
     loading,
     error,
+    useApi,
     availableFiles,
     selectedFile,
     loadData,
+    loadDataWithFilters,
     resetFilters,
     startDate,
     endDate,
