@@ -48,26 +48,43 @@
       <div class="sidebar-footer">
         <div class="user-profile">
           <i class="fas fa-user-circle user-icon"></i>
-          <span class="user-name">Nome do usuário</span>
+          <span class="user-name">{{ userDisplayName }}</span>
         </div>
-        <a href="/login" class="footer-action" @click="toggleMenu">
+        <button @click="handleLogout" class="footer-action" :title="'Sair'">
           <i class="fas fa-sign-out-alt"></i>
-        </a>
+        </button>
       </div>
     </aside>
   </div>
 </template>
 
 <script setup>
-import { RouterLink } from 'vue-router'
-import { ref } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useAuthStore } from '@/stores/authStore'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 const isMobileMenuOpen = ref(false)
+
+const userDisplayName = computed(() => {
+  if (authStore.user) {
+    return authStore.user.full_name || authStore.user.username || 'Usuário'
+  }
+  return 'Usuário'
+})
 
 const toggleMenu = () => {
   if (window.innerWidth < 768) {
     isMobileMenuOpen.value = !isMobileMenuOpen.value
   }
+}
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push({ name: 'login' })
+  toggleMenu()
 }
 </script>
 
@@ -230,6 +247,9 @@ const toggleMenu = () => {
   font-size: 1.1rem;
   transition: color 0.2s ease;
   padding: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
 .footer-action:hover {
