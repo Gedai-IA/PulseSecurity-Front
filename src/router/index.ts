@@ -9,6 +9,7 @@ import SentimentoView from '../views/SentimentoView.vue'
 import TopicosView from '../views/TopicosView.vue'
 import TendenciasView from '../views/TendenciasView.vue'
 import PublicacoesView from '../views/PublicacoesView.vue'
+import ObjectDetectorView from '../views/ObjectDetectorView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -37,6 +38,7 @@ const router = createRouter({
         { path: 'topicos', name: 'topicos', component: TopicosView },
         { path: 'tendencias', name: 'tendencias', component: TendenciasView },
         { path: 'publicacoes', name: 'publicacoes', component: PublicacoesView },
+        { path: 'object-detector', name: 'object-detector', component: ObjectDetectorView },
       ],
     },
   ],
