@@ -43,6 +43,10 @@
           <i class="fas fa-list-alt"></i>
           <span>Publicações</span>
         </RouterLink>
+        <RouterLink to="/object-detector" class="nav-item" @click="toggleMenu">
+          <i class="fas fa-eye"></i>
+          <span>Object Detector</span>
+        </RouterLink>
       </nav>
 
       <div class="sidebar-footer">
